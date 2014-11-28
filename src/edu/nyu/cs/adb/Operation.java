@@ -1,7 +1,7 @@
 package edu.nyu.cs.adb;
 
 
-public class Opeartion {
+public class Operation {
   
   public static enum Type {
     READ,
@@ -14,7 +14,7 @@ public class Opeartion {
   private int _writeValue = 0;
   private int _timestamp;
 
-  public Opeartion(int tid, int varIndex, int timestamp, Type type) {
+  public Operation(int tid, int varIndex, int timestamp, Type type) {
     _transactionId = tid;
     _varIndex = varIndex;
     _type = type;
@@ -51,9 +51,9 @@ public class Opeartion {
   public boolean equals(Object o){
     if (this == o)
       return true;
-    if (o == null || !(o instanceof Opeartion))
+    if (o == null || !(o instanceof Operation))
       return false;
-    Opeartion op = (Opeartion) o;
+    Operation op = (Operation) o;
     return _transactionId == op._transactionId 
         && _varIndex == op._varIndex
         && _writeValue == op._writeValue
