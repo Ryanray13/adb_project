@@ -3,6 +3,7 @@ package edu.nyu.cs.adb;
 public class Data {
   private int _value;
   private boolean _accessible;
+  private int _commitTime;
   
   public Data(int value){ 
     _value = value;
@@ -23,6 +24,14 @@ public class Data {
   
   public boolean getAccess(){
     return _accessible;
+  }
+  
+  public void setCommitTime(int time){
+    _commitTime = time;
+  }
+  
+  public int getCommitTime(){
+    return _commitTime;
   }
   
   @Override

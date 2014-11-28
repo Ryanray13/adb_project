@@ -1,5 +1,10 @@
 package edu.nyu.cs.adb;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 public class Transaction {
   
   public static enum Type {
@@ -10,6 +15,8 @@ public class Transaction {
   private int _transactionId;
   private int _timestamp;
   private Type _type; 
+  private List<DatabaseManager> _accessSites = new ArrayList<DatabaseManager>();
+  private Map<Integer, Integer> _changedVariables = new HashMap<Integer, Integer>();
 
   public Transaction(int tid, int timestamp, Type type){
     _transactionId = tid;
@@ -29,6 +36,13 @@ public class Transaction {
     return _transactionId;
   }
   
+  public List<DatabaseManager> getAccessSites(){
+    return _accessSites;
+  }
+  
+  public Map<Integer, Integer> getChangedvariables(){
+    return _changedVariables;
+  }
   
   @Override
   public boolean equals(Object o){
@@ -37,16 +51,11 @@ public class Transaction {
     if (o == null || !(o instanceof Transaction))
       return false;
     Transaction tr = (Transaction) o;
-    return _transactionId == tr._transactionId 
-        && _type == tr._type
-        && _timestamp == tr._timestamp;   
+    return _transactionId == tr._transactionId ;
   }
   
   @Override
   public int hashCode(){
-    int result = 17;
-    result = 31 * result + Integer.valueOf(_transactionId).hashCode();
-    result = 31 * result + Integer.valueOf(_timestamp).hashCode();
-    return result;  
+    return Integer.valueOf(_transactionId).hashCode(); 
   }
 }
