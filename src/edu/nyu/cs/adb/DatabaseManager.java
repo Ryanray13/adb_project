@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class DatabaseManager {
 
@@ -11,11 +12,9 @@ public class DatabaseManager {
   private int _siteIndex;
   private int _lastRecoveryTime;
   private TransactionManager _tm;
-  private Map<Integer, Data> _dataMap = new HashMap<Integer, Data>();
+  private Map<Integer, List<Data>> _dataMap = new HashMap<Integer, List<Data>>();
   private Map<Integer, List<Lock>> _lockTable = new HashMap<Integer, List<Lock>>();
   private List<Integer> _transactionAccessed = new ArrayList<Integer>();
-
-  private static Map<Integer, List<Data>> _availableCopies = new HashMap<Integer, List<Data>>();
 
   public DatabaseManager(int index, TransactionManager tm) {
     _siteStatus = true;
@@ -26,10 +25,10 @@ public class DatabaseManager {
 
   public void init() {
     for (int i = 1; i <= 20; i++) {
-      if (i % 2 == 0) {
-        _dataMap.put(i, new Data(i, 10 * i));
-      } else if ((1 + i % 10) == _siteIndex) {
-        _dataMap.put(i, new Data(i, 10 * i));
+      List<Data> dataList = new ArrayList<Data>();
+      if (i % 2 == 0 || (1 + i % 10) == _siteIndex) {
+        dataList.add(new Data(i, 10 * i));
+        _dataMap.put(i, dataList);
       }
     }
   }
@@ -42,7 +41,7 @@ public class DatabaseManager {
     _siteStatus = status;
   }
 
-  public Map<Integer, Data> getDataMap() {
+  public Map<Integer, List<Data>> getDataMap() {
     return _dataMap;
   }
 
@@ -75,11 +74,16 @@ public class DatabaseManager {
 
   }
 
-  /** recover this site, clear the lock table */
+  /** recover this site*/
   public void recover() {
 
   }
 
+  /** fail this site, clear the lock table */
+  public void fail() {
+
+  }
+  
   /**
    * Given a variable index, get the committed values of the variable Called by
    * TM
@@ -95,11 +99,19 @@ public class DatabaseManager {
    * Commit the given transaction, write all the values in site
    * 
    * @param t
-   * @return boolean
    */
-  public boolean commit(Transaction t) {
-    return true;
-  }
+  public void commit(Transaction t) {
+    return;
+  } 
+  
+  /**
+   * Abort the given transaction
+   * 
+   * @param t
+   */
+  public void abort(Transaction t) {
+    return;
+  } 
 
   /**
    * Given a variable index, read the data, if fails return null
@@ -132,7 +144,7 @@ public class DatabaseManager {
    * @param varIndex
    * @return true if can write, false if can't
    */
-  public boolean whetherCanWrite(Transaction t, int varIndex) {
+  public boolean isWritable(Transaction t, int varIndex) {
     return false;
   }
 
@@ -143,7 +155,7 @@ public class DatabaseManager {
    * @param varIndex
    * @return list of transaction ids
    */
-  List<Integer> getConflictTrans(int varIndex) {
+  Set<Integer> getConflictTrans(int varIndex) {
     return null;
   }
 
