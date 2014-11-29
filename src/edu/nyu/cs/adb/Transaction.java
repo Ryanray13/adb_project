@@ -1,10 +1,5 @@
 package edu.nyu.cs.adb;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 public class Transaction {
   
   public static enum Type {
@@ -15,8 +10,6 @@ public class Transaction {
   private int _transactionId;
   private int _timestamp;
   private Type _type; 
-  private List<Integer> _accessSites = new ArrayList<Integer>();
-  private Map<Integer, Integer> _changedVariables = new HashMap<Integer, Integer>();
 
   public Transaction(int tid, int timestamp, Type type){
     _transactionId = tid;
@@ -36,13 +29,6 @@ public class Transaction {
     return _transactionId;
   }
   
-  public List<Integer> getAccessSites(){
-    return _accessSites;
-  }
-  
-  public Map<Integer, Integer> getChangedvariables(){
-    return _changedVariables;
-  }
   
   @Override
   public boolean equals(Object o){

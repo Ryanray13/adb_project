@@ -1,5 +1,6 @@
 package edu.nyu.cs.adb;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -9,15 +10,18 @@ public class DatabaseManager {
   private boolean _siteStatus;
   private int _siteIndex;
   private int _lastRecoveryTime;
+  private TransactionManager _tm;
   private Map<Integer, Data> _dataMap = new HashMap<Integer, Data>();
   private Map<Integer, List<Lock>> _lockTable = new HashMap<Integer, List<Lock>>();
+  private List<Integer> _transactionAccessed = new ArrayList<Integer>();
 
   private static Map<Integer, List<Data>> _availableCopies = new HashMap<Integer, List<Data>>();
 
-  public DatabaseManager(int index) {
+  public DatabaseManager(int index, TransactionManager tm) {
     _siteStatus = true;
     _lastRecoveryTime = -1;
     _siteIndex = index;
+    _tm = tm;
   }
 
   public void init() {
@@ -51,8 +55,16 @@ public class DatabaseManager {
   }
 
   /* set corresponding lock for given variable */
-  private void setLock(int tid, int variableIndex, Lock.Type type) {
-
+  private void setLock(int tid, int varIndex, Lock.Type type) {
+    List<Lock> list = null;
+    if(_lockTable.containsKey(varIndex)){
+      list = _lockTable.get(varIndex);
+      list.add(new Lock(tid, type));
+    }else{
+      list = new ArrayList<Lock>();
+      list.add(new Lock(tid, type));
+      _lockTable.put(varIndex, list);
+    }
   }
 
   /*
