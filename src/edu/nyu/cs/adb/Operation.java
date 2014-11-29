@@ -21,6 +21,14 @@ public class Operation {
     _timestamp = timestamp;
   }
   
+  public Operation(int tid, int varIndex, int timestamp, Type type, int value) {
+    _transactionId = tid;
+    _varIndex = varIndex;
+    _type = type;
+    _timestamp = timestamp;
+    _writeValue = value;
+  }
+  
   public Type getType(){
     return _type;
   }
