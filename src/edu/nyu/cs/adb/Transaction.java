@@ -15,7 +15,7 @@ public class Transaction {
   private int _transactionId;
   private int _timestamp;
   private Type _type; 
-  private List<DatabaseManager> _accessSites = new ArrayList<DatabaseManager>();
+  private List<Integer> _accessSites = new ArrayList<Integer>();
   private Map<Integer, Integer> _changedVariables = new HashMap<Integer, Integer>();
 
   public Transaction(int tid, int timestamp, Type type){
@@ -36,7 +36,7 @@ public class Transaction {
     return _transactionId;
   }
   
-  public List<DatabaseManager> getAccessSites(){
+  public List<Integer> getAccessSites(){
     return _accessSites;
   }
   

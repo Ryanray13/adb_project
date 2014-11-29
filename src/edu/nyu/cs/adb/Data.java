@@ -2,12 +2,15 @@ package edu.nyu.cs.adb;
 
 public class Data {
   private int _value;
+  private int _index;
   private boolean _accessible;
   private int _commitTime;
   
-  public Data(int value){ 
+  public Data(int index, int value){ 
+    _index = index;
     _value = value;
     _accessible = true;
+    _commitTime = -1;
   }
   
   public void setValue(int value){
@@ -34,6 +37,10 @@ public class Data {
     return _commitTime;
   }
   
+  public int getIndex(){
+    return _index;
+  }
+  
   @Override
   public boolean equals(Object o){
     if (this == o)
@@ -41,12 +48,14 @@ public class Data {
     if (o == null || !(o instanceof Data))
       return false;
     Data data = (Data) o;
-    return _value == data._value;    
+    return _value == data._value && _index == data._index;   
   }
   
   @Override
   public int hashCode(){
-    return Integer.valueOf(_value).hashCode();
-    
+    int result = 17;
+    result = 31 * result + Integer.valueOf(_index).hashCode();
+    result = 31 * result + Integer.valueOf(_value).hashCode();
+    return result;    
   }
 }
