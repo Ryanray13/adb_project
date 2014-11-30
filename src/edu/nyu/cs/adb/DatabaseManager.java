@@ -75,7 +75,7 @@ public class DatabaseManager {
       return false;
     }
     List<Lock> lockList = _lockTable.get(varIndex);
-    if (type == Lock.Type.READ) {    
+    if (type == Lock.Type.READ) {
       for (Lock lc : lockList) {
         if (lc.getTranId() != tid && lc.getType() == Lock.Type.WRITE) {
           return true;
@@ -84,7 +84,7 @@ public class DatabaseManager {
       return false;
     } else {
       for (Lock lc : lockList) {
-        if (lc.getTranId() != tid){
+        if (lc.getTranId() != tid) {
           return true;
         }
       }
@@ -253,38 +253,58 @@ public class DatabaseManager {
     if (!_dataMap.containsKey(varIndex)) {
       return null;
     }
-
     int tid = t.getTranId();
-    boolean hasConflict = false;
-    Lock lock = null;
-    if (_lockTable.containsKey(varIndex)) {
-      List<Lock> lockList= _lockTable.get(varIndex);
-      for (Lock lc : lockList) {
-        if (lc.getTranId() == tid) {
-          lock = lc;
-        } else {
-          if (lc.getType() == Lock.Type.WRITE) {
-            hasConflict = true;
+    
+    if (t.getType() == Transaction.Type.RW) {
+      boolean hasConflict = false;
+      Lock lock = null;
+      if (_lockTable.containsKey(varIndex)) {
+        List<Lock> lockList = _lockTable.get(varIndex);
+        for (Lock lc : lockList) {
+          if (lc.getTranId() == tid) {
+            lock = lc;
+          } else {
+            if (lc.getType() == Lock.Type.WRITE) {
+              hasConflict = true;
+            }
           }
         }
       }
-    }
 
-    if (hasConflict) {
-      return null;
-    } else {
-      if (lock == null || lock.getType() == Lock.Type.READ) {
-        Data d = getLastCommitData(varIndex);
-        if (d.getAccess()) {
-          if (lock == null) {
-            setLock(tid, varIndex, Lock.Type.READ);
-          }
-          return d;
-        } else {
-          return null;
-        }
+      if (hasConflict) {
+        return null;
       } else {
-        return _uncommitDataMap.get(varIndex);
+        if (lock == null || lock.getType() == Lock.Type.READ) {
+          Data d = getLastCommitData(varIndex);
+          if (d.getAccess()) {
+            if (lock == null) {
+              setLock(tid, varIndex, Lock.Type.READ);
+            }
+            _accessedTransactions.add(tid);
+            return d;
+          } else {
+            return null;
+          }
+        } else {
+          _accessedTransactions.add(tid);
+          return _uncommitDataMap.get(varIndex);
+        }
+      }
+    } else {
+      List<Data> dataList = _dataMap.get(varIndex);
+      Data d = null;
+      int ttime = t.getTimestamp();
+      for(Data dt : dataList){
+        if(dt.getCommitTime() <= ttime){
+          d = dt;
+        }else{
+          break;
+        }
+      }
+      if(d.getAccess()){
+        return d;
+      }else{
+        return null;
       }
     }
   }
@@ -301,21 +321,22 @@ public class DatabaseManager {
   public void write(Transaction t, int varIndex, int value) {
     int tid = t.getTranId();
     Lock lc = getLock(tid, varIndex);
-    if(hasConflict(tid, varIndex, Lock.Type.WRITE)){
+    if (hasConflict(tid, varIndex, Lock.Type.WRITE)) {
       return;
     }
-    if(lc == null){
-      setLock(tid,varIndex,Lock.Type.WRITE);
-    }else{
-      if(lc.getType() == Lock.Type.READ){
-        lc.setType(Lock.Type.WRITE);
+    if (lc == null) {
+      setLock(tid, varIndex, Lock.Type.WRITE);
+    } else {
+      if (lc.getType() == Lock.Type.READ) {
+        lc.escalateLock();
       }
     }
-    if(_uncommitDataMap.containsKey(varIndex)){
+    _accessedTransactions.add(tid);
+    if (_uncommitDataMap.containsKey(varIndex)) {
       Data d = _uncommitDataMap.get(varIndex);
       d.setValue(value);
-    }else{
-      Data d = new Data(varIndex,value);
+    } else {
+      Data d = new Data(varIndex, value);
       _uncommitDataMap.put(varIndex, d);
     }
   }
@@ -339,7 +360,7 @@ public class DatabaseManager {
    * @param varIndex
    * @return list of transaction ids
    */
-  Set<Integer> getConflictTrans(int varIndex) {
+  public Set<Integer> getConflictTrans(int varIndex) {
     Set<Integer> conflictSet = new HashSet<Integer>();
     if (_lockTable.containsKey(varIndex)) {
       List<Lock> lockList = _lockTable.get(varIndex);

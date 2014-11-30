@@ -22,8 +22,8 @@ class Lock {
     return _type;
   }
   
-  public void setType(Lock.Type type){
-    _type = type;
+  public void escalateLock(){
+    _type = Type.WRITE;
   }
   
   @Override
