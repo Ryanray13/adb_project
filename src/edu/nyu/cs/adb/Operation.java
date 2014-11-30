@@ -76,6 +76,7 @@ public class Operation {
     result = 31 * result + Integer.valueOf(_varIndex).hashCode();
     result = 31 * result + Integer.valueOf(_writeValue).hashCode();
     result = 31 * result + Integer.valueOf(_timestamp).hashCode();
+    result = 31 * result + _type.hashCode();
     return result;  
   }
 }

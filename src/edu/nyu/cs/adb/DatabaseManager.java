@@ -1,12 +1,13 @@
 package edu.nyu.cs.adb;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import edu.nyu.cs.adb.Lock.Type;
 
 public class DatabaseManager {
 
@@ -14,6 +15,7 @@ public class DatabaseManager {
   private int _siteIndex;
   private TransactionManager _tm;
   private Map<Integer, List<Data>> _dataMap = new HashMap<Integer, List<Data>>();
+  private Map<Integer, Data> _uncommitDataMap = new HashMap<Integer, Data>();
   private Map<Integer, List<Lock>> _lockTable = new HashMap<Integer, List<Lock>>();
   private Set<Integer> _accessedTransactions = new HashSet<Integer>();
 
@@ -43,14 +45,50 @@ public class DatabaseManager {
 
   /* set corresponding lock for given variable */
   private void setLock(int tid, int varIndex, Lock.Type type) {
-    List<Lock> list = null;
-    if(_lockTable.containsKey(varIndex)){
-      list = _lockTable.get(varIndex);
-      list.add(new Lock(tid, type));
-    }else{
-      list = new ArrayList<Lock>();
-      list.add(new Lock(tid, type));
-      _lockTable.put(varIndex, list);
+    List<Lock> lockList = null;
+    if (_lockTable.containsKey(varIndex)) {
+      lockList = _lockTable.get(varIndex);
+      lockList.add(new Lock(tid, type));
+    } else {
+      lockList = new ArrayList<Lock>();
+      lockList.add(new Lock(tid, type));
+      _lockTable.put(varIndex, lockList);
+    }
+  }
+
+  /* Get the corresponding lock for given variable and given transaction */
+  private Lock getLock(int tid, int varIndex) {
+    if (_lockTable.containsKey(varIndex)) {
+      List<Lock> lockList = _lockTable.get(varIndex);
+      for (Lock lc : lockList) {
+        if (lc.getTranId() == tid) {
+          return lc;
+        }
+      }
+    }
+    return null;
+  }
+
+  /* check whether there is conflict with that tid */
+  private boolean hasConflict(int tid, int varIndex, Lock.Type type) {
+    if (!_lockTable.containsKey(varIndex)) {
+      return false;
+    }
+    List<Lock> lockList = _lockTable.get(varIndex);
+    if (type == Lock.Type.READ) {    
+      for (Lock lc : lockList) {
+        if (lc.getTranId() != tid && lc.getType() == Lock.Type.WRITE) {
+          return true;
+        }
+      }
+      return false;
+    } else {
+      for (Lock lc : lockList) {
+        if (lc.getTranId() != tid){
+          return true;
+        }
+      }
+      return false;
     }
   }
 
@@ -59,68 +97,150 @@ public class DatabaseManager {
    * commit
    */
   private void releaseAllLocks(int tid) {
-
+    List<Lock> lockList = null;
+    for (Integer varIndex : _lockTable.keySet()) {
+      lockList = _lockTable.get(varIndex);
+      int size = lockList.size();
+      for (int i = size - 1; i >= 0; i--) {
+        if (lockList.get(i).getTranId() == tid) {
+          lockList.remove(i);
+          break;
+        }
+      }
+    }
   }
 
-  /** recover this site*/
+  /** recover this site */
   public void recover() {
-
+    _siteStatus = true;
+    for (Integer varIndex : _dataMap.keySet()) {
+      List<Data> dataList;
+      if (varIndex % 2 == 0) {
+        dataList = _dataMap.get(varIndex);
+        dataList.get(dataList.size() - 1).setAccess(false);
+      }
+    }
   }
 
   /** fail this site, clear the lock table */
   public void fail() {
-
+    _siteStatus = false;
+    _lockTable.clear();
+    _accessedTransactions.clear();
+    _uncommitDataMap.clear();
   }
-  
+
   /**
    * Return the data map this site has
+   * 
    * @return dataMap
    */
   public Map<Integer, Data> getDataMap() {
     Map<Integer, Data> result = new HashMap<Integer, Data>();
-    for(Integer key: _dataMap.keySet()){
-      List<Data> list = _dataMap.get(key);
-      result.put(key, list.get(list.size()-1));
+    for (Integer varIndex : _dataMap.keySet()) {
+      List<Data> dataList = _dataMap.get(varIndex);
+      result.put(varIndex, dataList.get(dataList.size() - 1));
     }
     return result;
   }
-  
+
   /**
-   * Return all the transactions that have accessed this site
-   * When the site fails, those transactions need to abort
+   * Return all the transactions that have accessed this site When the site
+   * fails, those transactions need to abort
+   * 
    * @return accessed transactions list
    */
   public List<Integer> getAccessedTransaction() {
     return new ArrayList<Integer>(_accessedTransactions);
   }
-  
+
   /**
    * Given a variable index, get the committed values of the variable.
-   *  Called by TM
+   * 
    * @param varIndex
    * @return data
    */
   public Data dump(int varIndex) {
-    return null;
+    if (_dataMap.containsKey(varIndex)) {
+      return getLastCommitData(varIndex);
+    } else {
+      return null;
+    }
+  }
+
+  /* get the last commit data of that index */
+  private Data getLastCommitData(int varIndex) {
+    List<Data> dataList = _dataMap.get(varIndex);
+    return dataList.get(dataList.size() - 1);
   }
 
   /**
-   * Commit the given transaction, write all the values in site
+   * clear all the old copies of the variable on this site
+   */
+  public void clearAllCopies() {
+    for (Integer varIndex : _dataMap.keySet()) {
+      List<Data> dataList = _dataMap.get(varIndex);
+      while (dataList.size() > 1) {
+        dataList.remove(0);
+      }
+    }
+  }
+
+  /**
+   * Commit the given transaction, write all the values in site And release all
+   * the lock it holds
    * 
    * @param t
    */
   public void commit(Transaction t) {
-    return;
-  } 
-  
+    List<Lock> lockList = null;
+    int tid = t.getTranId();
+    boolean hasRO = _tm.hasRunningReadonly();
+    for (Integer varIndex : _lockTable.keySet()) {
+      lockList = _lockTable.get(varIndex);
+      int size = lockList.size();
+      for (int i = size - 1; i >= 0; i--) {
+        Lock lc = lockList.get(i);
+        if (lc.getTranId() == tid) {
+          if (lc.getType() == Lock.Type.WRITE) {
+            if (_uncommitDataMap.containsKey(varIndex)) {
+              List<Data> dataList = _dataMap.get(varIndex);
+              Data d = _uncommitDataMap.get(varIndex);
+              d.setCommitTime(_tm.getCurrentTime());
+              if (!hasRO) {
+                dataList.clear();
+              }
+              dataList.add(d);
+              _uncommitDataMap.remove(varIndex);
+            }
+          }
+          lockList.remove(i);
+          break;
+        }
+      }
+    }
+  }
+
   /**
-   * Abort the given transaction
+   * Abort the given transaction, release all the locks it holds
    * 
    * @param t
    */
   public void abort(Transaction t) {
-    return;
-  } 
+    int tid = t.getTranId();
+    List<Lock> lockList = null;
+    for (Integer varIndex : _lockTable.keySet()) {
+      lockList = _lockTable.get(varIndex);
+      int size = lockList.size();
+      for (int i = size - 1; i >= 0; i--) {
+        if (lockList.get(i).getTranId() == tid) {
+          lockList.remove(i);
+          _uncommitDataMap.remove(varIndex);
+          break;
+        }
+      }
+    }
+  }
 
   /**
    * Given a variable index, read the data, if fails return null
@@ -130,7 +250,43 @@ public class DatabaseManager {
    * @return data
    */
   public Data read(Transaction t, int varIndex) {
-    return null;
+    if (!_dataMap.containsKey(varIndex)) {
+      return null;
+    }
+
+    int tid = t.getTranId();
+    boolean hasConflict = false;
+    Lock lock = null;
+    if (_lockTable.containsKey(varIndex)) {
+      List<Lock> lockList= _lockTable.get(varIndex);
+      for (Lock lc : lockList) {
+        if (lc.getTranId() == tid) {
+          lock = lc;
+        } else {
+          if (lc.getType() == Lock.Type.WRITE) {
+            hasConflict = true;
+          }
+        }
+      }
+    }
+
+    if (hasConflict) {
+      return null;
+    } else {
+      if (lock == null || lock.getType() == Lock.Type.READ) {
+        Data d = getLastCommitData(varIndex);
+        if (d.getAccess()) {
+          if (lock == null) {
+            setLock(tid, varIndex, Lock.Type.READ);
+          }
+          return d;
+        } else {
+          return null;
+        }
+      } else {
+        return _uncommitDataMap.get(varIndex);
+      }
+    }
   }
 
   /**
@@ -143,6 +299,25 @@ public class DatabaseManager {
    * @param value
    */
   public void write(Transaction t, int varIndex, int value) {
+    int tid = t.getTranId();
+    Lock lc = getLock(tid, varIndex);
+    if(hasConflict(tid, varIndex, Lock.Type.WRITE)){
+      return;
+    }
+    if(lc == null){
+      setLock(tid,varIndex,Lock.Type.WRITE);
+    }else{
+      if(lc.getType() == Lock.Type.READ){
+        lc.setType(Lock.Type.WRITE);
+      }
+    }
+    if(_uncommitDataMap.containsKey(varIndex)){
+      Data d = _uncommitDataMap.get(varIndex);
+      d.setValue(value);
+    }else{
+      Data d = new Data(varIndex,value);
+      _uncommitDataMap.put(varIndex, d);
+    }
   }
 
   /**
@@ -154,7 +329,7 @@ public class DatabaseManager {
    * @return true if can write, false if can't
    */
   public boolean isWritable(Transaction t, int varIndex) {
-    return false;
+    return !hasConflict(t.getTranId(), varIndex, Lock.Type.WRITE);
   }
 
   /**
@@ -165,7 +340,14 @@ public class DatabaseManager {
    * @return list of transaction ids
    */
   Set<Integer> getConflictTrans(int varIndex) {
-    return null;
+    Set<Integer> conflictSet = new HashSet<Integer>();
+    if (_lockTable.containsKey(varIndex)) {
+      List<Lock> lockList = _lockTable.get(varIndex);
+      for (Lock lc : lockList) {
+        conflictSet.add(lc.getTranId());
+      }
+    }
+    return conflictSet;
   }
 
 }
