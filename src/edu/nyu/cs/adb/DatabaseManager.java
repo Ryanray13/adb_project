@@ -1,7 +1,9 @@
 package edu.nyu.cs.adb;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -10,15 +12,13 @@ public class DatabaseManager {
 
   private boolean _siteStatus;
   private int _siteIndex;
-  private int _lastRecoveryTime;
   private TransactionManager _tm;
   private Map<Integer, List<Data>> _dataMap = new HashMap<Integer, List<Data>>();
   private Map<Integer, List<Lock>> _lockTable = new HashMap<Integer, List<Lock>>();
-  private List<Integer> _transactionAccessed = new ArrayList<Integer>();
+  private Set<Integer> _accessedTransactions = new HashSet<Integer>();
 
   public DatabaseManager(int index, TransactionManager tm) {
     _siteStatus = true;
-    _lastRecoveryTime = -1;
     _siteIndex = index;
     _tm = tm;
   }
@@ -39,18 +39,6 @@ public class DatabaseManager {
 
   public void setStatus(boolean status) {
     _siteStatus = status;
-  }
-
-  public Map<Integer, List<Data>> getDataMap() {
-    return _dataMap;
-  }
-
-  public int getRecoverTime() {
-    return _lastRecoveryTime;
-  }
-
-  public void setRecoverTime(int time) {
-    _lastRecoveryTime = time;
   }
 
   /* set corresponding lock for given variable */
@@ -85,9 +73,30 @@ public class DatabaseManager {
   }
   
   /**
-   * Given a variable index, get the committed values of the variable Called by
-   * TM
-   * 
+   * Return the data map this site has
+   * @return dataMap
+   */
+  public Map<Integer, Data> getDataMap() {
+    Map<Integer, Data> result = new HashMap<Integer, Data>();
+    for(Integer key: _dataMap.keySet()){
+      List<Data> list = _dataMap.get(key);
+      result.put(key, list.get(list.size()-1));
+    }
+    return result;
+  }
+  
+  /**
+   * Return all the transactions that have accessed this site
+   * When the site fails, those transactions need to abort
+   * @return accessed transactions list
+   */
+  public List<Integer> getAccessedTransaction() {
+    return new ArrayList<Integer>(_accessedTransactions);
+  }
+  
+  /**
+   * Given a variable index, get the committed values of the variable.
+   *  Called by TM
    * @param varIndex
    * @return data
    */
