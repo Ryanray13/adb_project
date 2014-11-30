@@ -14,16 +14,39 @@ public class TransactionManager {
   private Map<Integer, Transaction> transactions = 
       new HashMap<Integer, Transaction>();
   
-  private List<DatabaseManager> databaseManagers = 
-      new ArrayList<DatabaseManager>();
+  private List<DatabaseManager> databaseManagers;
   
-  private List<Transaction> abortedTransactions = 
-      new ArrayList<Transaction>();
+  private List<Integer> abortedTransactions = 
+      new ArrayList<Integer>();
   
-  private List<Transaction> committedTransactions = 
-      new ArrayList<Transaction>();
+  private List<Integer> committedTransactions = 
+      new ArrayList<Integer>();
 
-  private List<Operation> waitingOpeartions = new ArrayList<Operation>();
+  private List<Operation> waitingOpeartions =
+      new ArrayList<Operation>();
+  
+  /**
+   * Return the current time stamp.
+   * @return
+   */
+  public int getCurrentTime() {
+    return timestamp;
+  }
+  
+  /**
+   * Check whether there is any running READ_ONLY transaction. 
+   * @return
+   */
+  public boolean hasRunningReadonly() {
+    for (Integer tid : transactions.keySet()) {
+      if (transactions.get(tid).getType() == Transaction.Type.RO 
+          && !committedTransactions.contains(tid) 
+          && !abortedTransactions.contains(tid)) {
+        return true;
+      }
+    }
+    return false;
+  }
   
   
   /**
@@ -32,13 +55,23 @@ public class TransactionManager {
    * @param filename
    */
   public void run(String inputFile) {
-    initialize();
+    int nDatabaseManager = 10;
+    initialize(nDatabaseManager);
     parseInput(inputFile);
   }
   
-  private void initialize() {
+  /**
+   * Initialize database managers of the given number
+   * @param nDatabaseManager the number of database managers to be initialized.
+   */
+  private void initialize(int nDatabaseManager) {
     timestamp = 0;
-    //TODO: initialize database manager, set site xi to value 10i.
+    //TODO: initialize database manager, set initial values for every site.
+    for (int index = 1; index <= nDatabaseManager; index++) {
+      DatabaseManager dm = new DatabaseManager(index);
+      dm.init();
+      databaseManagers.add(dm);
+    }
   }
 
   /**
@@ -100,24 +133,7 @@ public class TransactionManager {
     return null;
   }
   
-  /** Parse "T*, x*" into corresponding read operation */
-  private Operation parseReadOperation(String arg) {
-    String[] args = arg.split(",");
-    check(args.length == 2, "Unexpected Read " + arg);
-    int tid = parseTransactionId(args[0]);
-    int var = parseVariable(args[1]);
-    return new Operation(tid, var, timestamp, Operation.Type.READ);
-  }
-
-  /** Parse "T*, x*, **" into corresponding write operation */
-  private Operation parseWriteOperation(String arg) {
-    String[] args = arg.split(",");
-    check(args.length == 3, "Unexpected Write " + arg);
-    int tid = parseTransactionId(args[0]);
-    int var = parseVariable(args[1]);
-    int writeValue = Integer.parseInt(args[2]);
-    return new Operation(tid, var, timestamp, Operation.Type.WRITE, writeValue);
-  }
+  
 
   private void endTransaction(String arg) {
     //TODO: make sure argument is of  ^T[0-9]+$
@@ -140,7 +156,6 @@ public class TransactionManager {
   }
   
   private void execute(Operation operation) {
-    
   }
 
   /**
@@ -148,7 +163,7 @@ public class TransactionManager {
    * @param index
    */
   private void fail(int index) {
-    databaseManagers.get(index).setSiteStatus(false);
+    databaseManagers.get(index).setStatus(false);
   }
 
   /**
@@ -172,6 +187,25 @@ public class TransactionManager {
   /** Parse variable index from "x*" */
   private int parseVariable(String s) {
     return Integer.parseInt(s.substring(1));
+  }
+  
+  /** Parse "T*, x*" into corresponding read operation */
+  private Operation parseReadOperation(String arg) {
+    String[] args = arg.split(",");
+    check(args.length == 2, "Unexpected Read " + arg);
+    int tid = parseTransactionId(args[0]);
+    int var = parseVariable(args[1]);
+    return new Operation(tid, var, timestamp, Operation.Type.READ);
+  }
+
+  /** Parse "T*, x*, **" into corresponding write operation */
+  private Operation parseWriteOperation(String arg) {
+    String[] args = arg.split(",");
+    check(args.length == 3, "Unexpected Write " + arg);
+    int tid = parseTransactionId(args[0]);
+    int var = parseVariable(args[1]);
+    int writeValue = Integer.parseInt(args[2]);
+    return new Operation(tid, var, timestamp, Operation.Type.WRITE, writeValue);
   }
   
   /** If condition is false, print out error message and exit program */
