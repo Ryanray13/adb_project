@@ -1,6 +1,5 @@
 package edu.nyu.cs.adb;
 
-
 public class Operation {
   
   public static enum Type {
@@ -53,6 +52,24 @@ public class Operation {
     if(_type == Type.WRITE){
       _writeValue = value;
     }
+  }
+  
+  @Override
+  public String toString() {
+    String oper = "[" + _timestamp + "]";
+    if (_type == Type.READ) {
+      oper += " R";
+    } else {
+      oper += " W";
+    }
+    oper += "(T" + _transactionId + ",";
+    oper += "x" + _varIndex;
+    if (_type == Type.READ) {
+      oper += ")";
+    } else {
+      oper += "," + _writeValue + ")"; 
+    }
+    return oper;
   }
   
   @Override

@@ -1,7 +1,10 @@
 package edu.nyu.cs.adb;
 
+import java.awt.geom.Line2D;
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -17,6 +20,11 @@ public class TransactionManager {
   // global time stamp
   private int timestamp;
   
+  private boolean stdin = false;
+  
+  private boolean verbose = false;
+  
+  private BufferedReader br;
   // Map<Transaction id, Transaction>
   private Map<Integer, Transaction> transactions = 
       new HashMap<Integer, Transaction>();
@@ -66,27 +74,32 @@ public class TransactionManager {
    */
   public TransactionManager() {
     int nDatabaseManager = 10;
-    //init(nDatabaseManager);
+    verbose = true;
+    stdin = true;
+    br = new BufferedReader(new InputStreamReader(System.in));
   }
   
-  public static void main(String[] args) {
-    TransactionManager tm = new TransactionManager();
-    tm.init(10, tm);
-    tm.run("data/Test0");
+  public TransactionManager(String inputFile) {
+    try {
+      br = new BufferedReader(new FileReader(inputFile));
+    } catch (Exception e) {
+      // TODO: handle exception
+    }
   }
+  
   
   /**
    * Initialize database managers of the given number
    * @param nDatabaseManager the number of database managers 
    * to be initialized.
    */
-  private void init(int nDatabaseManager, TransactionManager tm) {
+  public void init(int nDatabaseManager) {
     timestamp = 0;
     databaseManagers = new ArrayList<DatabaseManager>();
     variableMap = new HashMap<Integer, List<Integer>>();
     for (int index = 1; index <= nDatabaseManager; index++) {
       //TODO: how to pass tm to dm?
-      DatabaseManager dm = new DatabaseManager(index, tm);
+      DatabaseManager dm = new DatabaseManager(index, this);
       dm.init();
       databaseManagers.add(dm);
     }
@@ -105,21 +118,29 @@ public class TransactionManager {
     }
   }
   
+  //TODO:(1) T1 write x1 twice, lock is on himself.
+  //TODO:(2) T is ended while some operations of it are still waiting.
   /**
    * Read content from input file, parse instructions from each line, 
    * and run instructions accordingly.
    * @param inputFile
    */
-  public void run(String inputFile) {
-    try {
-      BufferedReader br = new BufferedReader(new FileReader(inputFile));
+  public void run() {
       while (true) {
 //        batchExecute(waitingOpeartions);
         while (waitingOperations.size() != 0) {
           execute(waitingOperations.poll());
         }
-        String line = br.readLine();
-        if (line == null) break;
+        String line = "";
+        try {
+          line = br.readLine();
+        } catch (IOException e) {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
+        }
+
+        if (line == null || line.equals("exit")) break;
+        
         if (line.startsWith("//")) continue;
         if ( !line.isEmpty() ) {
           List<Operation> operations = parseLine(line);
@@ -127,12 +148,15 @@ public class TransactionManager {
         }
         timestamp++;
       }
-      br.close();
-    } catch (Exception e) {
-      System.err.println(e.getMessage());
-    }
+      try {
+        br.close();
+      } catch (IOException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
   }
   
+
   /** 
    * Parse line into list of instructions.Execute instruction.
    * For "begin", "end", "fail", "recover" immediately.
@@ -161,7 +185,7 @@ public class TransactionManager {
       } else if (token.equals("W")) {
         result.add(parseWriteOperation(arg));
       } else if (token.equals("dump")) {
-        //TODO: not implemented yet!
+        parseDump(arg);
       } else {
         check(false, "Unexpected input: " + instruction);
       }
@@ -184,6 +208,7 @@ public class TransactionManager {
    * @param operation
    */
   public void execute(Operation oper) {
+    System.out.println(oper.toString());
     if (oper.getType() == Operation.Type.READ) {
       read(oper);
     } else {
@@ -196,7 +221,13 @@ public class TransactionManager {
    * @param oper
    */
   public void write(Operation oper) {
-    if (hasAborted(oper.getTranId())) return; 
+    if (hasAborted(oper.getTranId())) { 
+      if (verbose) { 
+        System.out.println(oper.toString() + 
+            " has been ignored bebcause transaction has been aborted");
+      }
+      return; 
+    }
     boolean writable = true;
     int varIndex = oper.getVarIndex();
     Set<Integer> conflictTranSet = new HashSet<Integer>();
@@ -211,9 +242,18 @@ public class TransactionManager {
       }
     }
     if (writable) {
-      for (DatabaseManager dm : databaseManagers) {
+      for (Integer siteIndex : sites) {
+        DatabaseManager dm = databaseManagers.get(siteIndex); 
         dm.write(transactions.get(
             oper.getTranId()), varIndex, oper.getWriteValue());
+      }
+      if (verbose) {
+        String output = "Write " + oper.getWriteValue() + " to sites: [";
+        for (Integer siteIndex : sites) {
+          output += siteIndex + ",";
+        }
+        output += "]";
+        System.out.println(output);
       }
     } else {
       int oldest = getOldestTime(conflictTranSet);
@@ -252,7 +292,8 @@ public class TransactionManager {
           //TODO: where to store the value that have been read
           operation.setWriteValue(data.getValue());
           return;
-        } else if (dm.getConflictTrans(varIndex) != null) {
+        } else if ( dm.getConflictTrans(varIndex) != null 
+            && dm.getConflictTrans(varIndex).size() != 0) {
           //TODO: wait or abort
           Iterator<Integer> it = dm.getConflictTrans(varIndex).iterator();
           int tid = it.next();
@@ -270,14 +311,21 @@ public class TransactionManager {
    * @param oper
    * @param t
    */
-  public void waitDieProtocol(Operation oper, int t) {
+  public boolean waitDieProtocol(Operation oper, int t) {
     if (waitOrDie(oper.getTranId(), t) == "wait") {
 //      waitingOpeartions.add(oper);
+      //TODO: abort yonger transaction
       waitingOperations.offer(oper);
+      if (verbose) {
+        System.out.println("Put " + oper.toString() + " to wait");
+      }
+      return true;
     } else {
       abort(transactions.get(oper.getTranId()));
+      return false;
     }
   }
+  
 
   /**
    * If transaction of given id has smaller time stamp than given time stamp,
@@ -289,8 +337,42 @@ public class TransactionManager {
   public String waitOrDie(int tid, int timestamp) {
     return (transactions.get(tid).getTimestamp() < timestamp) ? "wait" : "die";
   }
-
+  
+  public void parseDump(String arg) {
+    String argument = arg.trim();
+    if (arg.equals("")) {
+      // dump()
+      dump();
+    } else if (argument.startsWith("x")) {
+      dumpVar(parseVariable(argument));
+    } else {
+      dumpSite(parseSiteIndex(argument));
+    }
+  }
  
+  public void dump() {
+    for (DatabaseManager dm : databaseManagers) {
+      dumpSite(dm.getIndex());
+    }
+  }
+  
+  public void dumpSite (int siteIndex) {
+    Map<Integer, Data> siteVars = databaseManagers.get(siteIndex).getDataMap();
+    for (Integer varIndex : siteVars.keySet()) {
+      System.out.println("x" + varIndex + ": " + 
+    siteVars.get(varIndex).getValue());
+    }
+  }
+  
+  public void dumpVar (int varIndex) {
+    for (DatabaseManager dm : databaseManagers) {
+      Data data = dm.dump(varIndex);
+      if (data != null) {
+        System.out.println("x" + varIndex + ": " + data.getValue());
+      }
+    }
+  }
+  
 
   /** 
    * Parse transaction id from tidStr and then create new transaction. 
@@ -371,17 +453,17 @@ public class TransactionManager {
 
   /** Parse transaction id from "T*" string */
   public int parseTransactionId(String s) {
-    return Integer.parseInt(s.substring(1));
+    return Integer.parseInt(s.trim().substring(1));
   }
 
   /** Parse site index out of string. */
   public int parseSiteIndex(String s) {
-    return Integer.parseInt(s);
+    return Integer.parseInt(s.trim());
   }
 
   /** Parse variable index from "x*" */
   public int parseVariable(String s) {
-    return Integer.parseInt(s.substring(1));
+    return Integer.parseInt(s.trim().substring(1));
   }
 
   /** Parse "T*, x*" into corresponding read operation */
@@ -399,7 +481,7 @@ public class TransactionManager {
     check(args.length == 3, "Unexpected Write " + arg);
     int tid = parseTransactionId(args[0]);
     int var = parseVariable(args[1]);
-    int writeValue = Integer.parseInt(args[2]);
+    int writeValue = Integer.parseInt(args[2].trim());
     return new Operation(tid, var, timestamp, Operation.Type.WRITE, writeValue);
   }
 

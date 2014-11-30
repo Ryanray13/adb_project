@@ -34,6 +34,10 @@ public class DatabaseManager {
       }
     }
   }
+  
+  public int getIndex() {
+    return _siteIndex;
+  }
 
   public boolean getStatus() {
     return _siteStatus;
@@ -361,6 +365,9 @@ public class DatabaseManager {
    * @return list of transaction ids
    */
   public Set<Integer> getConflictTrans(int varIndex) {
+    if (!_dataMap.containsKey(varIndex)) {
+      return null;
+    }
     Set<Integer> conflictSet = new HashSet<Integer>();
     if (_lockTable.containsKey(varIndex)) {
       List<Lock> lockList = _lockTable.get(varIndex);
