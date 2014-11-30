@@ -2,10 +2,13 @@ package edu.nyu.cs.adb;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Set;
 
 public class TransactionManager {
   
@@ -15,6 +18,8 @@ public class TransactionManager {
       new HashMap<Integer, Transaction>();
   
   private List<DatabaseManager> databaseManagers;
+  
+  private Map<Integer, List<Integer>> variableMap;
   
   private List<Integer> abortedTransactions = 
       new ArrayList<Integer>();
@@ -47,47 +52,63 @@ public class TransactionManager {
     }
     return false;
   }
-  
-  
+
   /**
-   * Parse instructions from input file into database operations.
-   * Run those operations. And generate results to standard output.
-   * @param filename
+   * Constructor initializing database managers.
    */
-  public void run(String inputFile) {
+  public TransactionManager() {
     int nDatabaseManager = 10;
     initialize(nDatabaseManager);
-    parseInput(inputFile);
   }
   
   /**
    * Initialize database managers of the given number
-   * @param nDatabaseManager the number of database managers to be initialized.
+   * @param nDatabaseManager the number of database managers 
+   * to be initialized.
    */
   private void initialize(int nDatabaseManager) {
     timestamp = 0;
-    //TODO: initialize database manager, set initial values for every site.
     for (int index = 1; index <= nDatabaseManager; index++) {
-      DatabaseManager dm = new DatabaseManager(index);
+      DatabaseManager dm = new DatabaseManager(index, null);
       dm.init();
       databaseManagers.add(dm);
     }
+    for (int index = 1 ; index <= 20 ; index++) {
+      List<Integer> sites = new ArrayList<Integer>();
+      if (index % 2 == 1) {
+        // store odd variable at (1 + index mod 10) site
+        sites.add(1 + index % 10);
+      } else {
+        // even variable are stored in all sites.
+        for (int i = 1; i <= 10; i++) {
+          sites.add(i);
+        }
+      }
+      variableMap.put(index, sites);
+    }
   }
 
+  
   /**
-   * Read instructions from input file. Then parse each instruction into 
-   * corresponding database operation. Create Transaction list and Operation
-   * list accordingly.
+   * Read content from input file, parse instructions from each line, 
+   * and run instructions accordingly.
    * @param inputFile
    */
-  private void parseInput(String inputFile) {
+  public void run(String inputFile) {
     try {
       BufferedReader br = new BufferedReader(new FileReader(inputFile));
       while (true) {
+        timestamp++;
+        //TODO: try to do waiting operations.
+        for (Operation operation : waitingOpeartions) {
+          execute(operation);
+        }
         String line = br.readLine();
         if (line == null) break;
-        parseLine(line);
-        timestamp++;
+        List<Operation> operations = parseLine(line);
+        for (Operation operation : operations) {
+          execute(operation);
+        }
       }
       br.close();
     } catch (Exception e) {
@@ -95,57 +116,168 @@ public class TransactionManager {
     }
   }
   
+  /** 
+   * Parse line into list of instructions.Execute instruction 
+   * for "begin", "end", "fail", "recover" immediately.
+   */
   private List<Operation> parseLine(String line) {
-    String[] operationStrs = line.split(";");
-    for (String str : operationStrs) {
-      int tokenStart = 0;
-      int tokenEnd = str.indexOf("(");
-      String token = str.substring(tokenStart, tokenEnd);
-      int argsEnd = str.indexOf(")");
-      String args = str.substring(tokenEnd + 1, argsEnd);
-      switch (token) {
-        case "begin":
-          beginTransaction("RW", args);
-          break;
-        case "beginRO":
-          beginTransaction("RO", args);
-          break;
-        case "end":
-          endTransaction(args);
-          break;
-        case "W":
-          execute(parseWriteOperation(args));
-          break;
-        case "R":
-          execute(parseReadOperation(args));
-          break;
-        case "fail":
-          fail(parseSiteIndex(args));
-          break;
-        case "recover":
-          recover(parseSiteIndex(args));
-          break;
-        default:
-          check(false, "Unrecognised token in " + line);
-          break;
+    String[] instructions = line.split(";");
+    List<Operation> result = new ArrayList<Operation>();
+    for (String instruction: instructions) {
+      int tokenEnd = instruction.indexOf("(");
+      String token = instruction.substring(0, tokenEnd);
+      int argsEnd = instruction.indexOf(")");
+      String arg = instruction.substring(tokenEnd + 1, argsEnd);
+      if (token == "begin") {
+        beginTransaction("RW", arg);
+      } else if (token == "beginRO") {
+        beginTransaction("RO", arg);
+      } else if (token == "end") {
+        endTransaction(arg);
+      } else if (token == "fail") {
+        fail(parseSiteIndex(arg));
+      } else if (token == "recover") {
+        recover(parseSiteIndex(arg));
+      } else if (token == "R") {
+        result.add(parseReadOperation(arg));
+      } else if (token == "W") {
+        result.add(parseWriteOperation(arg));
+      } else if (token == "dump") {
+        //TODO: not implemented
+      } else {
+        check(false, "Unexpected input: " + instruction);
       }
     }
-    return null;
+    return result;
   }
   
+  private void execute(Operation operation) {
+    if (operation.getType() == Operation.Type.READ) {
+      read(operation);
+    } else {
+      write(operation);
+    }
+  }
   
-
-  private void endTransaction(String arg) {
-    //TODO: make sure argument is of  ^T[0-9]+$
-    int tid = parseTransactionId(arg);
-    check(!transactions.containsKey(tid), " already ended.");
-    transactions.remove(tid);
+  /**
+   * 
+   * @param oper
+   */
+  private void write(Operation oper) {
+    if (hasAborted(oper.getTranId())) return; 
+    boolean writable = true;
+    int varIndex = oper.getVarIndex();
+    Set<Integer> conflictTranSet = new HashSet<Integer>();
+    List<Integer> sites = getSites(varIndex);
+    for (Integer siteIndex : sites) {
+      DatabaseManager dm = databaseManagers.get(siteIndex);
+      //TODO: assume not all sites are down
+      if ( (dm.getStatus()) &&
+          (!dm.isWritable(transactions.get(oper.getTranId()), varIndex)) ) {
+        writable = false;
+        conflictTranSet.addAll(dm.getConflictTrans(varIndex));
+      }
+    }
+    if (writable) {
+      for (DatabaseManager dm : databaseManagers) {
+        dm.write(transactions.get(
+            oper.getTranId()), varIndex, oper.getWriteValue());
+      }
+    } else {
+      int oldest = getOldestTime(conflictTranSet);
+      waitDieProtocol(oper, oldest);
+    }
   }
 
-  private void beginTransaction(String type, String arg) {
+  private int getOldestTime(Set<Integer> conflictTranSet) {
+    int result = timestamp + 1;
+    Iterator<Integer> it = conflictTranSet.iterator();
+    while (it.hasNext()) {
+      int time = transactions.get(it.next()).getTimestamp();
+      if (time < result) {
+        result = time;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * 
+   * @param operation
+   */
+  private void read(Operation operation) {
+    // ignore operation if aborted
+    if (hasAborted(operation.getTranId())) {
+      return;
+    }
+    int varIndex = operation.getVarIndex();
+    List<Integer> sites = getSites(varIndex);
+    for (Integer siteIndex : sites) {
+      DatabaseManager dm = databaseManagers.get(siteIndex);
+      if (dm.getStatus()) {
+        Data data = dm.read(transactions.get(operation.getTranId()), varIndex);
+        if (data != null) {
+          //TODO: where to store the value that have been read
+          operation.setWriteValue(data.getValue());
+          return;
+        } else if (dm.getConflictTrans(varIndex) != null) {
+          //TODO: wait or abort
+          Iterator<Integer> it = dm.getConflictTrans(varIndex).iterator();
+          int tid = it.next();
+          waitDieProtocol(operation, transactions.get(tid).getTimestamp());
+          return;
+        }
+      }
+    }
+    waitingOpeartions.add(operation);
+  }
+  
+  /**
+   * 
+   * @param oper
+   * @param t
+   */
+  private void waitDieProtocol(Operation oper, int t) {
+    if (waitOrDie(oper.getTranId(), t) == "wait") {
+      waitingOpeartions.add(oper);
+    } else {
+      abort(transactions.get(oper.getTranId()));
+    }
+  }
+  
+  /**
+   * If transaction of given id has smaller time stamp than given time stamp,
+   * then this transaction should wait. Otherwise, abort this transaction.
+   * @param t
+   * @param timestamp
+   * @return "wait" or "die"
+   */
+  private String waitOrDie(int tid, int timestamp) {
+    return (transactions.get(tid).getTimestamp() < timestamp) ? "wait" : "die";
+  }
+  
+  /**
+   * Notify database managers to abort given transaction and
+   * put that transaction put into aborted list.
+   * @param t
+   */
+  private void abort(Transaction t) {
+    for (DatabaseManager dm : databaseManagers) {
+      dm.abort(t);
+    }
+    abortedTransactions.add(t.getTranId());
+  }
+  
+  /** 
+   * Parse transaction id from tidStr and then create new transaction. 
+   * @param type
+   * @param tidStr
+   */
+  private void beginTransaction(String type, String tidStr) {
     //TODO: make sure argument is of  ^T[0-9]+$
-    int tid = parseTransactionId(arg);
-    check(transactions.containsKey(tid), arg + " already begun."); 
+    int tid = parseTransactionId(tidStr);
+    //TODO: what if that transaction has finished but still in map ?
+    if (transactions.containsKey(tid)) return;
     if (type == "RO") {
       transactions.put(tid, 
           new Transaction(tid, timestamp, Transaction.Type.RO));
@@ -155,15 +287,33 @@ public class TransactionManager {
     }
   }
   
-  private void execute(Operation operation) {
+  /**
+   * Notify database managers to commit given transaction if that 
+   * transaction has not been aborted. And put that into committed list. 
+   */ 
+  private void endTransaction(String tidStr) {
+    //TODO: make sure argument is of  ^T[0-9]+$
+    int tid = parseTransactionId(tidStr);
+    if (!hasAborted(tid)) {
+      for (DatabaseManager dm : databaseManagers) {
+        dm.commit(transactions.get(tid));
+      }
+    }
+    committedTransactions.add(tid);
   }
 
   /**
-   * Let the site at given index fail.
+   * Let the site at given index fail. Abort all transactions that have
+   * accessed that site immediately.
    * @param index
    */
-  private void fail(int index) {
-    databaseManagers.get(index).setStatus(false);
+  private void fail(int siteIndex) {
+    List<Integer> accessedTransactions = 
+        databaseManagers.get(siteIndex).getAccessedTransaction();
+    for (Integer tid : accessedTransactions) {
+      abortedTransactions.add(tid);
+    }
+    databaseManagers.get(siteIndex).setStatus(false);
   }
 
   /**
@@ -174,14 +324,23 @@ public class TransactionManager {
     databaseManagers.get(index).recover();
   }
 
-  /** Convert string to site index. */
-  private int parseSiteIndex(String s) {
-    return Integer.parseInt(s);
+  /** Return all sites that storing given variable. */
+  private List<Integer> getSites (int varIndex) {
+    return variableMap.get(varIndex);
   }
   
-  /** Parse transaction id from "T*" */
+  private boolean hasAborted(int tid) {
+    return abortedTransactions.contains(tid);
+  }
+
+  /** Parse transaction id from "T*" string */
   private int parseTransactionId(String s) {
     return Integer.parseInt(s.substring(1));
+  }
+
+  /** Parse site index out of string. */
+  private int parseSiteIndex(String s) {
+    return Integer.parseInt(s);
   }
   
   /** Parse variable index from "x*" */
