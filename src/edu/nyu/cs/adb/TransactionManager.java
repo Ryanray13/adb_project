@@ -17,6 +17,7 @@ import java.util.Set;
 
 public class TransactionManager {
 
+
   // global time stamp
   private int timestamp;
 
@@ -64,12 +65,15 @@ public class TransactionManager {
   }
 
   /**
-   * Constructor with initializing.
+   * Constructor with standard input .
    */
   public TransactionManager() {
     br = new BufferedReader(new InputStreamReader(System.in));
   }
 
+  /**
+   * Constructor with file input .
+   */
   public TransactionManager(String inputFile) {
     try {
       br = new BufferedReader(new FileReader(inputFile));
@@ -120,10 +124,6 @@ public class TransactionManager {
   public void run() {
     while (true) {
       // batchExecute(waitingOpeartions);
-      int waitingSize = waitingOperations.size();
-      for (int i = 0; i < waitingSize; i++) {
-        execute(waitingOperations.poll());
-      }
       String line = "";
       try {
         line = br.readLine();
@@ -132,9 +132,9 @@ public class TransactionManager {
         e.printStackTrace();
       }
 
-      if (line == null || line.equals("exit"))
+      if (line == null || line.equals("exit()")){
         break;
-
+      }
       if (line.startsWith("//"))
         continue;
       if (!line.isEmpty()) {
@@ -142,6 +142,9 @@ public class TransactionManager {
         batchExecute(operations);
       }
 
+      for (int i = 0; i < waitingOperations.size(); i++) {
+        execute(waitingOperations.poll());
+      }
       timestamp++;
     }
     try {
@@ -183,26 +186,37 @@ public class TransactionManager {
         parseDump(arg);
       } else if (token.equals("querystate")) {
         outputState();
-      } else {
+      }else if (token.equals("clear")) {
+        restart();
+      }else {
         check(false, "Unexpected input: " + instruction);
       }
     }
     return result;
   }
 
+  private void restart() {
+    init(10);   
+    timestamp = -1;
+    transactions.clear();
+    committedTransactions.clear();
+    abortedTransactions.clear();
+    waitingOperations.clear();
+  }
+
   private void outputState() {
     System.out.println("Transactions committed:");
-    for (Integer t : this.committedTransactions) {
+    for (Integer t : committedTransactions) {
       System.out.print("T" + t + " ");
     }
     System.out.println();
     System.out.println("Transactions aborted:");
-    for (Integer t : this.abortedTransactions) {
+    for (Integer t : abortedTransactions) {
       System.out.print("T" + t + " ");
     }
     System.out.println();
     System.out.println("Transactions still running:");
-    for (Integer tid : this.transactions.keySet()) {
+    for (Integer tid : transactions.keySet()) {
       if (!committedTransactions.contains(tid)
           && !abortedTransactions.contains(tid)) {
         System.out.print("T" + tid + " ");
@@ -497,7 +511,7 @@ public class TransactionManager {
         .getAccessedTransaction();
     for (Integer tid : accessedTransactions) {
       abortedTransactions.add(tid);
-      this.abort(tid);
+      abort(tid);
     }
     databaseManagers.get(siteIndex - 1).fail();
   }
