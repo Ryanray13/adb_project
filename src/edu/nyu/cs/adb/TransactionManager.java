@@ -416,7 +416,7 @@ public class TransactionManager {
     int tid = parseTransactionId(tidStr);
     if (!hasAborted(tid)) {
       for (DatabaseManager dm : databaseManagers) {
-        dm.commit(tid);
+        dm.commit(transactions.get(tid));
       }
       committedTransactions.add(tid);
     }

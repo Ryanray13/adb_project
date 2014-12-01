@@ -194,7 +194,8 @@ public class DatabaseManager {
    * 
    * @param tid transaction id
    */
-  public void commit(int tid) {
+  public void commit(Transaction t) {
+    int tid = t.getTranId();
     List<Lock> lockList = null;
     boolean hasRO = _tm.hasRunningReadonly();
     for (Integer varIndex : _lockTable.keySet()) {
