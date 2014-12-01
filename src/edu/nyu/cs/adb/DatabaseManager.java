@@ -239,8 +239,10 @@ public class DatabaseManager {
       int size = lockList.size();
       for (int i = size - 1; i >= 0; i--) {
         if (lockList.get(i).getTranId() == tid) {
+          if(lockList.get(i).getType() == Lock.Type.WRITE){
+            _uncommitDataMap.remove(varIndex);
+          }
           lockList.remove(i);
-          _uncommitDataMap.remove(varIndex);
           break;
         }
       }
