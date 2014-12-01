@@ -12,7 +12,6 @@ public class DatabaseManager {
   private boolean _siteStatus;
   private int _siteIndex;
   private TransactionManager _tm;
-  private int lastFailTime;
   private Map<Integer, List<Data>> _dataMap = new HashMap<Integer, List<Data>>();
   private Map<Integer, Data> _uncommitDataMap = new HashMap<Integer, Data>();
   private Map<Integer, List<Lock>> _lockTable = new HashMap<Integer, List<Lock>>();
@@ -22,7 +21,6 @@ public class DatabaseManager {
     _siteStatus = true;
     _siteIndex = index;
     _tm = tm;
-    lastFailTime = -1;
   }
 
   public void init() {
@@ -132,7 +130,14 @@ public class DatabaseManager {
     _lockTable.clear();
     _accessedTransactions.clear();
     _uncommitDataMap.clear();
-    lastFailTime = _tm.getCurrentTime();
+    int failTime = _tm.getCurrentTime();
+    for (Integer varIndex : _dataMap.keySet()) {
+      List<Data> dataList;
+      if (varIndex % 2 == 0) {
+        dataList = _dataMap.get(varIndex);
+        dataList.get(dataList.size() - 1).setUnavailableTime(failTime);
+      }
+    }
   }
 
   /**
@@ -317,7 +322,7 @@ public class DatabaseManager {
       if(d.getAccess()){
           return d;
       }else{
-        if(lastFailTime >= ttime ){
+        if(d.getUnavailableTime() >= ttime ){
           return d;
         }else{
           return null;

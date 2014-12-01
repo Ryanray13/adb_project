@@ -5,12 +5,14 @@ public class Data {
   private int _index;
   private boolean _accessible;
   private int _commitTime;
+  private int unavailableTime;
   
   public Data(int index, int value){ 
     _index = index;
     _value = value;
     _accessible = true;
     _commitTime = -1;
+    unavailableTime = -1;
   }
   
   public void setValue(int value){
@@ -39,6 +41,16 @@ public class Data {
   
   public int getIndex(){
     return _index;
+  }
+  
+  public int getUnavailableTime(){
+    return unavailableTime;
+  }
+  
+  public void setUnavailableTime(int time){
+    if(unavailableTime == -1){
+      unavailableTime = time;
+    }
   }
   
   @Override
