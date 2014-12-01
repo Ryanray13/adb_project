@@ -194,8 +194,7 @@ public class DatabaseManager {
    * 
    * @param tid transaction id
    */
-  public void commit(Transaction t) {
-    int tid = t.getTranId();
+  public void commit(int tid) {
     List<Lock> lockList = null;
     boolean hasRO = _tm.hasRunningReadonly();
     for (Integer varIndex : _lockTable.keySet()) {
@@ -282,10 +281,8 @@ public class DatabaseManager {
               setLock(tid, varIndex, Lock.Type.READ);
             }
             _accessedTransactions.add(tid);
-            return d;
-          } else {
-            return null;
           }
+          return d;
         } else {
           _accessedTransactions.add(tid);
           return _uncommitDataMap.get(varIndex);
@@ -302,14 +299,7 @@ public class DatabaseManager {
           break;
         }
       }
-      if(d == null){
-        return d;
-      }
-      if(d.getAccess()){
-        return d;
-      }else{
-        return null;
-      }
+      return d;
     }
   }
 

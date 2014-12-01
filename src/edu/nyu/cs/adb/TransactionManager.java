@@ -121,6 +121,9 @@ public class TransactionManager {
     while (true) {
       // batchExecute(waitingOpeartions);
       int waitingSize = waitingOperations.size();
+      for (int i = 0; i < waitingSize; i++) {
+        execute(waitingOperations.poll());
+      }
       String line = "";
       try {
         line = br.readLine();
@@ -138,9 +141,7 @@ public class TransactionManager {
         List<Operation> operations = parseLine(line);
         batchExecute(operations);
       }
-      for (int i = 0; i < waitingSize; i++) {
-        execute(waitingOperations.poll());
-      }
+
       timestamp++;
     }
     try {
@@ -201,8 +202,9 @@ public class TransactionManager {
     }
     System.out.println();
     System.out.println("Transactions still running:");
-    for(Integer tid : this.transactions.keySet()){
-      if(!committedTransactions.contains(tid) && !abortedTransactions.contains(tid)){
+    for (Integer tid : this.transactions.keySet()) {
+      if (!committedTransactions.contains(tid)
+          && !abortedTransactions.contains(tid)) {
         System.out.print("T" + tid + " ");
       }
     }
@@ -254,7 +256,7 @@ public class TransactionManager {
         if (!dm.isWritable(oper.getTranId(), varIndex)) {
           writable = false;
           conflictTranSet.addAll(dm.getConflictTrans(varIndex));
-        } 
+        }
       }
     }
     if (writable && !allSitesDown) {
@@ -294,27 +296,63 @@ public class TransactionManager {
     }
     int varIndex = operation.getVarIndex();
     List<Integer> sites = getSites(varIndex);
-    for (Integer siteIndex : sites) {
-      DatabaseManager dm = databaseManagers.get(siteIndex - 1);
-      if (dm.getStatus()) {
-        Data data = dm.read(transactions.get(operation.getTranId()), varIndex);
-        if (data != null) {
-          System.out
-              .println("T" + operation.getTranId() + " reads x" + varIndex
-                  + " " + data.getValue() + " at site " + dm.getIndex());
-          return;
-        } else if (dm.getConflictTrans(varIndex) != null
-            && dm.getConflictTrans(varIndex).size() != 0) {
-          // TODO: wait or abort
-          Iterator<Integer> it = dm.getConflictTrans(varIndex).iterator();
-          int tid = it.next();
-          waitDieProtocol(operation, transactions.get(tid).getTimestamp());
-          return;
+    if (transactions.get(operation.getTranId()).getType() == Transaction.Type.RO) {
+      Data roData = null;
+      int roDataSiteIndex = -1;
+      int latestTime = -1;
+      for (Integer siteIndex : sites) {
+        DatabaseManager dm = databaseManagers.get(siteIndex - 1);
+        if (dm.getStatus()) {
+          Data data = dm.read(transactions.get(operation.getTranId()),
+              varIndex);
+          if (data != null) {
+            if (data.getAccess()) {
+              System.out.println("T" + operation.getTranId() + " reads x"
+                  + varIndex + " " + data.getValue() + " at site "
+                  + dm.getIndex());
+              return;
+            } else {
+              if (data.getCommitTime() > latestTime) {
+                roData = data;
+                latestTime = data.getCommitTime();
+                roDataSiteIndex = dm.getIndex();
+              }
+            }
+          }
         }
       }
+      if (roData == null) {
+        waitingOperations.offer(operation);
+      } else {
+        System.out.println("T" + operation.getTranId() + " reads x" + varIndex
+            + " " + roData.getValue() + " at site " + roDataSiteIndex);
+        return;
+      }
+    } else {
+      for (Integer siteIndex : sites) {
+        DatabaseManager dm = databaseManagers.get(siteIndex - 1);
+        if (dm.getStatus()) {
+          Data data = dm.read(transactions.get(operation.getTranId()),
+              varIndex);
+          if (data != null) {
+            if (data.getAccess()) {
+              System.out.println("T" + operation.getTranId() + " reads x"
+                  + varIndex + " " + data.getValue() + " at site "
+                  + dm.getIndex());
+              return;
+            }
+          } else if (dm.getConflictTrans(varIndex) != null
+              && dm.getConflictTrans(varIndex).size() != 0) {
+            // TODO: wait or abort
+            Iterator<Integer> it = dm.getConflictTrans(varIndex).iterator();
+            int tid = it.next();
+            waitDieProtocol(operation, transactions.get(tid).getTimestamp());
+            return;
+          }
+        }
+      }
+      waitingOperations.offer(operation);
     }
-    // waitingOpeartions.add(operation);
-    waitingOperations.offer(operation);
   }
 
   /**
@@ -409,16 +447,27 @@ public class TransactionManager {
 
   /**
    * Notify database managers to commit given transaction if that transaction
-   * has not been aborted. And put that into committed list.
+   * has not been aborted. And put that into committed list. If RO commits and
+   * no more RO clear all the copies in DMs
    */
   public void endTransaction(String tidStr) {
     // TODO: make sure argument is of ^T[0-9]+$
     int tid = parseTransactionId(tidStr);
     if (!hasAborted(tid)) {
       for (DatabaseManager dm : databaseManagers) {
-        dm.commit(transactions.get(tid));
+        if (dm.getStatus()) {
+          dm.commit(tid);
+        }
       }
       committedTransactions.add(tid);
+      if (transactions.containsKey(tid)) {
+        if (transactions.get(tid).getType() == Transaction.Type.RO
+            && !hasRunningReadonly()) {
+          for (DatabaseManager dm : databaseManagers) {
+            dm.clearAllCopies();
+          }
+        }
+      }
     }
   }
 
@@ -430,7 +479,9 @@ public class TransactionManager {
    */
   public void abort(int tid) {
     for (DatabaseManager dm : databaseManagers) {
-      dm.abort(tid);
+      if (dm.getStatus()) {
+        dm.abort(tid);
+      }
     }
     abortedTransactions.add(tid);
   }
@@ -509,5 +560,4 @@ public class TransactionManager {
      * if ( ! condition ) { System.err.println(errMsg); System.exit(-2); }
      */
   }
-
 }
