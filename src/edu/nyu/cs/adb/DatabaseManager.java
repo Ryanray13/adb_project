@@ -12,6 +12,7 @@ public class DatabaseManager {
   private boolean _siteStatus;
   private int _siteIndex;
   private TransactionManager _tm;
+  private int lastFailTime;
   private Map<Integer, List<Data>> _dataMap = new HashMap<Integer, List<Data>>();
   private Map<Integer, Data> _uncommitDataMap = new HashMap<Integer, Data>();
   private Map<Integer, List<Lock>> _lockTable = new HashMap<Integer, List<Lock>>();
@@ -21,6 +22,7 @@ public class DatabaseManager {
     _siteStatus = true;
     _siteIndex = index;
     _tm = tm;
+    lastFailTime = -1;
   }
 
   public void init() {
@@ -130,6 +132,7 @@ public class DatabaseManager {
     _lockTable.clear();
     _accessedTransactions.clear();
     _uncommitDataMap.clear();
+    lastFailTime = _tm.getCurrentTime();
   }
 
   /**
@@ -173,7 +176,11 @@ public class DatabaseManager {
   /* get the last commit data of that index */
   private Data getLastCommitData(int varIndex) {
     List<Data> dataList = _dataMap.get(varIndex);
-    return dataList.get(dataList.size() - 1);
+    if(dataList.size() > 0){
+      return dataList.get(dataList.size() - 1);
+    }else{
+      return null;
+    }
   }
 
   /**
@@ -276,13 +283,18 @@ public class DatabaseManager {
       } else {
         if (lock == null || lock.getType() == Lock.Type.READ) {
           Data d = getLastCommitData(varIndex);
+          if(d == null){
+            return null;
+          }
           if (d.getAccess()) {
             if (lock == null) {
               setLock(tid, varIndex, Lock.Type.READ);
             }
             _accessedTransactions.add(tid);
+            return d;
+          }else{
+            return null;
           }
-          return d;
         } else {
           _accessedTransactions.add(tid);
           return _uncommitDataMap.get(varIndex);
@@ -299,7 +311,18 @@ public class DatabaseManager {
           break;
         }
       }
-      return d;
+      if(d == null){
+        return d;
+      }
+      if(d.getAccess()){
+          return d;
+      }else{
+        if(lastFailTime >= ttime ){
+          return d;
+        }else{
+          return null;
+        }
+      }
     }
   }
 

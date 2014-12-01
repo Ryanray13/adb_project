@@ -360,66 +360,32 @@ public class TransactionManager {
    * 
    * @param operation
    */
-  private void read(Operation operation) {
-    if (hasAborted(operation.getTranId()))  return; 
+  public void read(Operation operation) {
+    // ignore operation if aborted
+    if (hasAborted(operation.getTranId())) {
+      return;
+    }
     int varIndex = operation.getVarIndex();
     List<Integer> sites = getSites(varIndex);
-    if (transactions.get(operation.getTranId()).getType() == Transaction.Type.RO) {
-      Data roData = null;
-      int roDataSiteIndex = -1;
-      int latestTime = -1;
-      for (Integer siteIndex : sites) {
-        DatabaseManager dm = databaseManagers.get(siteIndex - 1);
-        if (dm.getStatus()) {
-          Data data = dm.read(transactions.get(operation.getTranId()),
-              varIndex);
-          if (data != null) {
-            if (data.getAccess()) {
-              System.out.println("T" + operation.getTranId() + " reads x"
-                  + varIndex + " " + data.getValue() + " at site "
-                  + dm.getIndex());
-              return;
-            } else {
-              if (data.getCommitTime() > latestTime) {
-                roData = data;
-                latestTime = data.getCommitTime();
-                roDataSiteIndex = dm.getIndex();
-              }
-            }
-          }
+    for (Integer siteIndex : sites) {
+      DatabaseManager dm = databaseManagers.get(siteIndex - 1);
+      if (dm.getStatus()) {
+        Data data = dm.read(transactions.get(operation.getTranId()), varIndex);
+        if (data != null) {
+          System.out
+             .println("T" + operation.getTranId() + " reads x" + varIndex
+                  + " " + data.getValue() + " at site " + dm.getIndex());
+          return;
+        } else if (dm.getConflictTrans(varIndex) != null
+            && dm.getConflictTrans(varIndex).size() != 0) {
+          Iterator<Integer> it = dm.getConflictTrans(varIndex).iterator();
+          int tid = it.next();
+          waitDieProtocol(operation, transactions.get(tid).getTimestamp());
+          return;
         }
       }
-      if (roData == null) {
-        waitingOperations.offer(operation);
-      } else {
-        System.out.println("T" + operation.getTranId() + " reads x" + varIndex
-            + " " + roData.getValue() + " at site " + roDataSiteIndex);
-        return;
-      }
-    } else {
-      for (Integer siteIndex : sites) {
-        DatabaseManager dm = databaseManagers.get(siteIndex - 1);
-        if (dm.getStatus()) {
-          Data data = dm.read(transactions.get(operation.getTranId()),
-              varIndex);
-          if (data != null) {
-            if (data.getAccess()) {
-              System.out.println("T" + operation.getTranId() + " reads x"
-                  + varIndex + " " + data.getValue() + " at site "
-                  + dm.getIndex());
-              return;
-            }
-          } else if (dm.getConflictTrans(varIndex) != null
-              && dm.getConflictTrans(varIndex).size() != 0) {
-            Iterator<Integer> it = dm.getConflictTrans(varIndex).iterator();
-            int tid = it.next();
-            waitDieProtocol(operation, transactions.get(tid).getTimestamp());
-            return;
-          }
-        }
-      }
-      waitingOperations.offer(operation);
     }
+    waitingOperations.offer(operation);
   }
 
   /*
