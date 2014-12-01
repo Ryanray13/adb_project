@@ -12,6 +12,7 @@ public class DatabaseManager {
   private boolean _siteStatus;
   private int _siteIndex;
   private TransactionManager _tm;
+  private int _lastFailTime;
   private Map<Integer, List<Data>> _dataMap = new HashMap<Integer, List<Data>>();
   private Map<Integer, Data> _uncommitDataMap = new HashMap<Integer, Data>();
   private Map<Integer, List<Lock>> _lockTable = new HashMap<Integer, List<Lock>>();
@@ -21,6 +22,7 @@ public class DatabaseManager {
     _siteStatus = true;
     _siteIndex = index;
     _tm = tm;
+    _lastFailTime = -1;
   }
 
   public void init() {
@@ -119,7 +121,9 @@ public class DatabaseManager {
       List<Data> dataList;
       if (varIndex % 2 == 0) {
         dataList = _dataMap.get(varIndex);
-        dataList.get(dataList.size() - 1).setAccess(false);
+        Data d = dataList.get(dataList.size() - 1);
+        d.setAccess(false);
+        d.setUnavailableTime(_lastFailTime);
       }
     }
   }
@@ -130,14 +134,7 @@ public class DatabaseManager {
     _lockTable.clear();
     _accessedTransactions.clear();
     _uncommitDataMap.clear();
-    int failTime = _tm.getCurrentTime();
-    for (Integer varIndex : _dataMap.keySet()) {
-      List<Data> dataList;
-      if (varIndex % 2 == 0) {
-        dataList = _dataMap.get(varIndex);
-        dataList.get(dataList.size() - 1).setUnavailableTime(failTime);
-      }
-    }
+    _lastFailTime = _tm.getCurrentTime();
   }
 
   /**
@@ -181,11 +178,7 @@ public class DatabaseManager {
   /* get the last commit data of that index */
   private Data getLastCommitData(int varIndex) {
     List<Data> dataList = _dataMap.get(varIndex);
-    if(dataList.size() > 0){
-      return dataList.get(dataList.size() - 1);
-    }else{
-      return null;
-    }
+    return dataList.get(dataList.size() - 1);
   }
 
   /**
@@ -288,9 +281,6 @@ public class DatabaseManager {
       } else {
         if (lock == null || lock.getType() == Lock.Type.READ) {
           Data d = getLastCommitData(varIndex);
-          if(d == null){
-            return null;
-          }
           if (d.getAccess()) {
             if (lock == null) {
               setLock(tid, varIndex, Lock.Type.READ);
@@ -317,7 +307,7 @@ public class DatabaseManager {
         }
       }
       if(d == null){
-        return d;
+        return null;
       }
       if(d.getAccess()){
           return d;
