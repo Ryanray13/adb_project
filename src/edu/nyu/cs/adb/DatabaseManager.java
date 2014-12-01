@@ -7,8 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import edu.nyu.cs.adb.Lock.Type;
-
 public class DatabaseManager {
 
   private boolean _siteStatus;
@@ -97,7 +95,7 @@ public class DatabaseManager {
   }
 
   /*
-   * release all the lock hel by given transaction when transaction abort or
+   * release all the lock held by given transaction when transaction abort or
    * commit
    */
   private void releaseAllLocks(int tid) {
@@ -194,11 +192,10 @@ public class DatabaseManager {
    * Commit the given transaction, write all the values in site And release all
    * the lock it holds
    * 
-   * @param t
+   * @param tid transaction id
    */
-  public void commit(Transaction t) {
+  public void commit(int tid) {
     List<Lock> lockList = null;
-    int tid = t.getTranId();
     boolean hasRO = _tm.hasRunningReadonly();
     for (Integer varIndex : _lockTable.keySet()) {
       lockList = _lockTable.get(varIndex);
@@ -228,10 +225,9 @@ public class DatabaseManager {
   /**
    * Abort the given transaction, release all the locks it holds
    * 
-   * @param t
+   * @param tid transaction id
    */
-  public void abort(Transaction t) {
-    int tid = t.getTranId();
+  public void abort(int tid) {
     List<Lock> lockList = null;
     for (Integer varIndex : _lockTable.keySet()) {
       lockList = _lockTable.get(varIndex);
@@ -305,6 +301,9 @@ public class DatabaseManager {
           break;
         }
       }
+      if(d == null){
+        return d;
+      }
       if(d.getAccess()){
         return d;
       }else{
@@ -349,12 +348,12 @@ public class DatabaseManager {
    * Given a variable index and transaction, check whether the transaction can
    * write the variable, i.e. whether it can get the lock
    * 
-   * @param t
+   * @param tid
    * @param varIndex
    * @return true if can write, false if can't
    */
-  public boolean isWritable(Transaction t, int varIndex) {
-    return !hasConflict(t.getTranId(), varIndex, Lock.Type.WRITE);
+  public boolean isWritable(int tid, int varIndex) {
+    return !hasConflict(tid, varIndex, Lock.Type.WRITE);
   }
 
   /**

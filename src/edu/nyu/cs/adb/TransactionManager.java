@@ -1,10 +1,10 @@
 package edu.nyu.cs.adb;
 
-import java.awt.geom.Line2D;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -16,52 +16,46 @@ import java.util.Queue;
 import java.util.Set;
 
 public class TransactionManager {
-  
+
   // global time stamp
   private int timestamp;
-  
-  private boolean stdin = false;
-  
-  private boolean verbose = false;
-  
+
   private BufferedReader br;
   // Map<Transaction id, Transaction>
-  private Map<Integer, Transaction> transactions = 
-      new HashMap<Integer, Transaction>();
-  
+  private Map<Integer, Transaction> transactions = new HashMap<Integer, Transaction>();
+
   private List<DatabaseManager> databaseManagers;
-  
+
   // Map<Variable index, List of sites storing this variable>
   private Map<Integer, List<Integer>> variableMap;
-  
-  // List of transaction id that have been aborted.
-  private List<Integer> abortedTransactions = 
-      new ArrayList<Integer>();
-  
-  // List of transaction id that have committed.
-  private List<Integer> committedTransactions = 
-      new ArrayList<Integer>();
 
-  // TODO: change to queue 
-  private Queue<Operation> waitingOperations = 
-      new LinkedList<Operation>();
-  
+  // List of transaction id that have been aborted.
+  private Set<Integer> abortedTransactions = new HashSet<Integer>();
+
+  // List of transaction id that have committed.
+  private Set<Integer> committedTransactions = new HashSet<Integer>();
+
+  // TODO: change to queue
+  private Queue<Operation> waitingOperations = new LinkedList<Operation>();
+
   /**
    * Return the current time stamp.
+   * 
    * @return time stamp
    */
   public int getCurrentTime() {
     return timestamp;
   }
-  
+
   /**
-   * Check whether there is any running READ_ONLY transaction. 
+   * Check whether there is any running READ_ONLY transaction.
+   * 
    * @return
    */
   public boolean hasRunningReadonly() {
     for (Integer tid : transactions.keySet()) {
-      if (transactions.get(tid).getType() == Transaction.Type.RO 
-          && !committedTransactions.contains(tid) 
+      if (transactions.get(tid).getType() == Transaction.Type.RO
+          && !committedTransactions.contains(tid)
           && !abortedTransactions.contains(tid)) {
         return true;
       }
@@ -73,12 +67,9 @@ public class TransactionManager {
    * Constructor with initializing.
    */
   public TransactionManager() {
-    int nDatabaseManager = 10;
-    verbose = true;
-    stdin = true;
     br = new BufferedReader(new InputStreamReader(System.in));
   }
-  
+
   public TransactionManager(String inputFile) {
     try {
       br = new BufferedReader(new FileReader(inputFile));
@@ -86,24 +77,24 @@ public class TransactionManager {
       // TODO: handle exception
     }
   }
-  
-  
+
   /**
    * Initialize database managers of the given number
-   * @param nDatabaseManager the number of database managers 
-   * to be initialized.
+   * 
+   * @param nDatabaseManager
+   *          the number of database managers to be initialized.
    */
   public void init(int nDatabaseManager) {
     timestamp = 0;
     databaseManagers = new ArrayList<DatabaseManager>();
     variableMap = new HashMap<Integer, List<Integer>>();
     for (int index = 1; index <= nDatabaseManager; index++) {
-      //TODO: how to pass tm to dm?
+      // TODO: how to pass tm to dm?
       DatabaseManager dm = new DatabaseManager(index, this);
       dm.init();
       databaseManagers.add(dm);
     }
-    for (int index = 1 ; index <= 20 ; index++) {
+    for (int index = 1; index <= 20; index++) {
       List<Integer> sites = new ArrayList<Integer>();
       if (index % 2 == 1) {
         // store odd variable at (1 + index mod 10) site
@@ -117,54 +108,57 @@ public class TransactionManager {
       variableMap.put(index, sites);
     }
   }
-  
-  //TODO:(1) T1 write x1 twice, lock is on himself.
-  //TODO:(2) T is ended while some operations of it are still waiting.
+
+  // TODO:(1) T1 write x1 twice, lock is on himself.
+  // TODO:(2) T is ended while some operations of it are still waiting.
   /**
-   * Read content from input file, parse instructions from each line, 
-   * and run instructions accordingly.
+   * Read content from input file, parse instructions from each line, and run
+   * instructions accordingly.
+   * 
    * @param inputFile
    */
   public void run() {
-      while (true) {
-//        batchExecute(waitingOpeartions);
-        while (waitingOperations.size() != 0) {
-          execute(waitingOperations.poll());
-        }
-        String line = "";
-        try {
-          line = br.readLine();
-        } catch (IOException e) {
-          // TODO Auto-generated catch block
-          e.printStackTrace();
-        }
-
-        if (line == null || line.equals("exit")) break;
-        
-        if (line.startsWith("//")) continue;
-        if ( !line.isEmpty() ) {
-          List<Operation> operations = parseLine(line);
-          batchExecute(operations);
-        }
-        timestamp++;
-      }
+    while (true) {
+      // batchExecute(waitingOpeartions);
+      int waitingSize = waitingOperations.size();
+      String line = "";
       try {
-        br.close();
+        line = br.readLine();
       } catch (IOException e) {
         // TODO Auto-generated catch block
         e.printStackTrace();
       }
-  }
-  
 
-  /** 
-   * Parse line into list of instructions.Execute instruction.
-   * For "begin", "end", "fail", "recover" immediately.
+      if (line == null || line.equals("exit"))
+        break;
+
+      if (line.startsWith("//"))
+        continue;
+      if (!line.isEmpty()) {
+        List<Operation> operations = parseLine(line);
+        batchExecute(operations);
+      }
+      for (int i = 0; i < waitingSize; i++) {
+        execute(waitingOperations.poll());
+      }
+      timestamp++;
+    }
+    try {
+      br.close();
+    } catch (IOException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+  }
+
+  /**
+   * Parse line into list of instructions.Execute instruction. For "begin",
+   * "end", "fail", "recover" immediately.
    */
   private List<Operation> parseLine(String line) {
     String[] instructions = line.split(";");
     List<Operation> result = new ArrayList<Operation>();
-    for (String instruction: instructions) {
+    for (String instruction : instructions) {
       instruction = instruction.trim();
       int tokenEnd = instruction.indexOf("(");
       String token = instruction.substring(0, tokenEnd);
@@ -172,7 +166,7 @@ public class TransactionManager {
       String arg = instruction.substring(tokenEnd + 1, argsEnd);
       if (token.equals("begin")) {
         beginTransaction("RW", arg);
-      } else if (token.equals("beginRO")) { 
+      } else if (token.equals("beginRO")) {
         beginTransaction("RO", arg);
       } else if (token.equals("end")) {
         endTransaction(arg);
@@ -186,6 +180,8 @@ public class TransactionManager {
         result.add(parseWriteOperation(arg));
       } else if (token.equals("dump")) {
         parseDump(arg);
+      } else if (token.equals("querystate")) {
+        outputState();
       } else {
         check(false, "Unexpected input: " + instruction);
       }
@@ -193,8 +189,29 @@ public class TransactionManager {
     return result;
   }
 
+  private void outputState() {
+    System.out.println("Transactions committed:");
+    for (Integer t : this.committedTransactions) {
+      System.out.print("T" + t + " ");
+    }
+    System.out.println();
+    System.out.println("Transactions aborted:");
+    for (Integer t : this.abortedTransactions) {
+      System.out.print("T" + t + " ");
+    }
+    System.out.println();
+    System.out.println("Transactions still running:");
+    for(Integer tid : this.transactions.keySet()){
+      if(!committedTransactions.contains(tid) && !abortedTransactions.contains(tid)){
+        System.out.print("T" + tid + " ");
+      }
+    }
+    System.out.println();
+  }
+
   /**
    * Execute a batch of operations.
+   * 
    * @param operations
    */
   public void batchExecute(List<Operation> operations) {
@@ -202,13 +219,13 @@ public class TransactionManager {
       execute(oper);
     }
   }
-  
+
   /**
    * Execute a single operation.
+   * 
    * @param operation
    */
   public void execute(Operation oper) {
-    System.out.println(oper.toString());
     if (oper.getType() == Operation.Type.READ) {
       read(oper);
     } else {
@@ -221,39 +238,32 @@ public class TransactionManager {
    * @param oper
    */
   public void write(Operation oper) {
-    if (hasAborted(oper.getTranId())) { 
-      if (verbose) { 
-        System.out.println(oper.toString() + 
-            " has been ignored bebcause transaction has been aborted");
-      }
-      return; 
+    if (hasAborted(oper.getTranId())) {
+      return;
     }
     boolean writable = true;
+    boolean allSitesDown = true;
     int varIndex = oper.getVarIndex();
     Set<Integer> conflictTranSet = new HashSet<Integer>();
     List<Integer> sites = getSites(varIndex);
     for (Integer siteIndex : sites) {
-      DatabaseManager dm = databaseManagers.get(siteIndex);
-      //TODO: assume not all sites are down
-      if ( (dm.getStatus()) &&
-          (!dm.isWritable(transactions.get(oper.getTranId()), varIndex)) ) {
-        writable = false;
-        conflictTranSet.addAll(dm.getConflictTrans(varIndex));
+      DatabaseManager dm = databaseManagers.get(siteIndex - 1);
+      // TODO: assume not all sites are down
+      if (dm.getStatus()) {
+        allSitesDown = false;
+        if (!dm.isWritable(oper.getTranId(), varIndex)) {
+          writable = false;
+          conflictTranSet.addAll(dm.getConflictTrans(varIndex));
+        } 
       }
     }
-    if (writable) {
+    if (writable && !allSitesDown) {
       for (Integer siteIndex : sites) {
-        DatabaseManager dm = databaseManagers.get(siteIndex); 
-        dm.write(transactions.get(
-            oper.getTranId()), varIndex, oper.getWriteValue());
-      }
-      if (verbose) {
-        String output = "Write " + oper.getWriteValue() + " to sites: [";
-        for (Integer siteIndex : sites) {
-          output += siteIndex + ",";
+        DatabaseManager dm = databaseManagers.get(siteIndex - 1);
+        if (dm.getStatus()) {
+          dm.write(transactions.get(oper.getTranId()), varIndex,
+              oper.getWriteValue());
         }
-        output += "]";
-        System.out.println(output);
       }
     } else {
       int oldest = getOldestTime(conflictTranSet);
@@ -285,16 +295,17 @@ public class TransactionManager {
     int varIndex = operation.getVarIndex();
     List<Integer> sites = getSites(varIndex);
     for (Integer siteIndex : sites) {
-      DatabaseManager dm = databaseManagers.get(siteIndex);
+      DatabaseManager dm = databaseManagers.get(siteIndex - 1);
       if (dm.getStatus()) {
         Data data = dm.read(transactions.get(operation.getTranId()), varIndex);
         if (data != null) {
-          //TODO: where to store the value that have been read
-          operation.setWriteValue(data.getValue());
+          System.out
+              .println("T" + operation.getTranId() + " reads x" + varIndex
+                  + " " + data.getValue() + " at site " + dm.getIndex());
           return;
-        } else if ( dm.getConflictTrans(varIndex) != null 
+        } else if (dm.getConflictTrans(varIndex) != null
             && dm.getConflictTrans(varIndex).size() != 0) {
-          //TODO: wait or abort
+          // TODO: wait or abort
           Iterator<Integer> it = dm.getConflictTrans(varIndex).iterator();
           int tid = it.next();
           waitDieProtocol(operation, transactions.get(tid).getTimestamp());
@@ -302,7 +313,7 @@ public class TransactionManager {
         }
       }
     }
-//    waitingOpeartions.add(operation);
+    // waitingOpeartions.add(operation);
     waitingOperations.offer(operation);
   }
 
@@ -313,23 +324,20 @@ public class TransactionManager {
    */
   public boolean waitDieProtocol(Operation oper, int t) {
     if (waitOrDie(oper.getTranId(), t) == "wait") {
-//      waitingOpeartions.add(oper);
-      //TODO: abort yonger transaction
+      // waitingOpeartions.add(oper);
+      // TODO: abort yonger transaction
       waitingOperations.offer(oper);
-      if (verbose) {
-        System.out.println("Put " + oper.toString() + " to wait");
-      }
       return true;
     } else {
-      abort(transactions.get(oper.getTranId()));
+      abort(oper.getTranId());
       return false;
     }
   }
-  
 
   /**
    * If transaction of given id has smaller time stamp than given time stamp,
    * then this transaction should wait. Otherwise, abort this transaction.
+   * 
    * @param t
    * @param timestamp
    * @return "wait" or "die"
@@ -337,7 +345,7 @@ public class TransactionManager {
   public String waitOrDie(int tid, int timestamp) {
     return (transactions.get(tid).getTimestamp() < timestamp) ? "wait" : "die";
   }
-  
+
   public void parseDump(String arg) {
     String argument = arg.trim();
     if (arg.equals("")) {
@@ -349,101 +357,111 @@ public class TransactionManager {
       dumpSite(parseSiteIndex(argument));
     }
   }
- 
+
   public void dump() {
     for (DatabaseManager dm : databaseManagers) {
+      System.out.println("Site: " + dm.getIndex());
       dumpSite(dm.getIndex());
     }
   }
-  
-  public void dumpSite (int siteIndex) {
-    Map<Integer, Data> siteVars = databaseManagers.get(siteIndex).getDataMap();
-    for (Integer varIndex : siteVars.keySet()) {
-      System.out.println("x" + varIndex + ": " + 
-    siteVars.get(varIndex).getValue());
+
+  public void dumpSite(int siteIndex) {
+    Map<Integer, Data> siteVars = databaseManagers.get(siteIndex - 1)
+        .getDataMap();
+    List<Integer> indexList = new ArrayList<Integer>(siteVars.keySet());
+    Collections.sort(indexList);
+    for (Integer varIndex : indexList) {
+      System.out.println("x" + varIndex + ": "
+          + siteVars.get(varIndex).getValue());
     }
   }
-  
-  public void dumpVar (int varIndex) {
+
+  public void dumpVar(int varIndex) {
     for (DatabaseManager dm : databaseManagers) {
       Data data = dm.dump(varIndex);
       if (data != null) {
-        System.out.println("x" + varIndex + ": " + data.getValue());
+        System.out.println("x" + varIndex + ": " + data.getValue()
+            + " at site " + dm.getIndex());
       }
     }
   }
-  
 
-  /** 
-   * Parse transaction id from tidStr and then create new transaction. 
+  /**
+   * Parse transaction id from tidStr and then create new transaction.
+   * 
    * @param type
    * @param tidStr
    */
   public void beginTransaction(String type, String tidStr) {
-    //TODO: make sure argument is of  ^T[0-9]+$
+    // TODO: make sure argument is of ^T[0-9]+$
     int tid = parseTransactionId(tidStr);
-    //TODO: what if that transaction has finished but still in map ?
-    if (transactions.containsKey(tid)) return;
+    // TODO: what if that transaction has finished but still in map ?
+    if (transactions.containsKey(tid))
+      return;
     if (type == "RO") {
-      transactions.put(tid, 
-          new Transaction(tid, timestamp, Transaction.Type.RO));
+      transactions.put(tid, new Transaction(tid, timestamp,
+          Transaction.Type.RO));
     } else {
-      transactions.put(tid, 
-          new Transaction(tid, timestamp, Transaction.Type.RW));
+      transactions.put(tid, new Transaction(tid, timestamp,
+          Transaction.Type.RW));
     }
   }
 
   /**
-   * Notify database managers to commit given transaction if that 
-   * transaction has not been aborted. And put that into committed list. 
-   */ 
+   * Notify database managers to commit given transaction if that transaction
+   * has not been aborted. And put that into committed list.
+   */
   public void endTransaction(String tidStr) {
-    //TODO: make sure argument is of  ^T[0-9]+$
+    // TODO: make sure argument is of ^T[0-9]+$
     int tid = parseTransactionId(tidStr);
     if (!hasAborted(tid)) {
       for (DatabaseManager dm : databaseManagers) {
-        dm.commit(transactions.get(tid));
+        dm.commit(tid);
       }
+      committedTransactions.add(tid);
     }
-    committedTransactions.add(tid);
-  }
-  
-  /**
-   * Notify database managers to abort given transaction and
-   * put that transaction put into aborted list.
-   * @param t
-   */
-  public void abort(Transaction t) {
-    for (DatabaseManager dm : databaseManagers) {
-      dm.abort(t);
-    }
-    abortedTransactions.add(t.getTranId());
   }
 
   /**
-   * Let the site at given index fail. Abort all transactions that have
-   * accessed that site immediately.
+   * Notify database managers to abort given transaction and put that
+   * transaction put into aborted list.
+   * 
+   * @param tid
+   */
+  public void abort(int tid) {
+    for (DatabaseManager dm : databaseManagers) {
+      dm.abort(tid);
+    }
+    abortedTransactions.add(tid);
+  }
+
+  /**
+   * Let the site at given index fail. Abort all transactions that have accessed
+   * that site immediately.
+   * 
    * @param index
    */
   public void fail(int siteIndex) {
-    List<Integer> accessedTransactions = 
-        databaseManagers.get(siteIndex).getAccessedTransaction();
+    List<Integer> accessedTransactions = databaseManagers.get(siteIndex - 1)
+        .getAccessedTransaction();
     for (Integer tid : accessedTransactions) {
       abortedTransactions.add(tid);
+      this.abort(tid);
     }
-    databaseManagers.get(siteIndex).setStatus(false);
+    databaseManagers.get(siteIndex - 1).fail();
   }
 
   /**
    * Recovery site at given index.
+   * 
    * @param index
    */
   public void recover(int index) {
-    databaseManagers.get(index).recover();
+    databaseManagers.get(index - 1).recover();
   }
 
   /** Return all sites that storing given variable. */
-  public List<Integer> getSites (int varIndex) {
+  public List<Integer> getSites(int varIndex) {
     return variableMap.get(varIndex);
   }
 
@@ -488,11 +506,8 @@ public class TransactionManager {
   /** If condition is false, print out error message and exit program */
   public void check(boolean condition, String errMsg) {
     /*
-    if ( ! condition ) {
-      System.err.println(errMsg);
-      System.exit(-2);
-    }
-    */
+     * if ( ! condition ) { System.err.println(errMsg); System.exit(-2); }
+     */
   }
 
 }
