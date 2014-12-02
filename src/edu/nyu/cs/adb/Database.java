@@ -47,6 +47,7 @@ public class Database {
     int nDatabaseManagers = 10;    
     tm.init(nDatabaseManagers);  
     System.out.println("Database starts, use exit() to exit database >>");
+    System.out.println();
     tm.run();
     
   }

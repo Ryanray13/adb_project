@@ -272,6 +272,8 @@ public class TransactionManager {
     //If site fails, abort all the transaction accessed to the site
     for (Integer tid : accessedTransactions) {
       abortedTransactions.add(tid);
+      System.out.println("T" + tid + " should abort because Site"
+          + siteIndex + " fail. ");
       abort(tid);
     }
     databaseManagers.get(siteIndex - 1).fail();
@@ -482,8 +484,8 @@ public class TransactionManager {
       waitingOperations.offer(oper);
       return true;
     } else {
-      System.out.println("T" + oper.getTranId() + " should abort because T"
-          + t.getTranId() + " is older (" + oper.toString() + ")");
+      System.out.println("T" + oper.getTranId() + " should abort because conflict with T"
+          + t.getTranId() + " (" + oper.toString() + ")");
       abort(oper.getTranId());
       return false;
     }
@@ -531,6 +533,7 @@ public class TransactionManager {
 
   // Print all committed values of given variable.
   public void dumpVar(int varIndex) {
+    System.out.println("====== x: " + varIndex + " ======");
     for (DatabaseManager dm : databaseManagers) {
       Data data = dm.dump(varIndex);
       if (data != null) {

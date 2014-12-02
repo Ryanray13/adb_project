@@ -1,0 +1,15 @@
+//Own Test 3
+//T1, T2 should wait because sites down
+//When 4 recover, T2 can read x3 but T1 still wait
+//When 2 recover, T1 can read
+begin(T1)
+begin(T2)
+fail(2);fail(4)
+R(T1,x1)
+R(T2,x3)
+recover(4)
+W(T2,x3,88)
+end(T2)
+recover(2)
+end(T1)
+dump(x3)
