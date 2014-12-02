@@ -458,10 +458,11 @@ public class DatabaseManager {
    * Given a variable index return the list of transaction ids that have
    * conflicts, i.e. other transactions have the lock on this variable.
    * 
-   * @param varIndex
+   * @param tid transaction id
+   * @param varIndex variable index
    * @return list of transaction ids
    */
-  public Set<Integer> getConflictTrans(int varIndex) {
+  public Set<Integer> getConflictTrans(int tid, int varIndex) {
     if (!_dataMap.containsKey(varIndex)) {
       return null;
     }
@@ -469,7 +470,9 @@ public class DatabaseManager {
     if (_lockTable.containsKey(varIndex)) {
       List<Lock> lockList = _lockTable.get(varIndex);
       for (Lock lc : lockList) {
-        conflictSet.add(lc.getTranId());
+        if(lc.getTranId() != tid){
+          conflictSet.add(lc.getTranId());
+        }
       }
     }
     return conflictSet;

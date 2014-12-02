@@ -24,10 +24,6 @@ package edu.nyu.cs.adb;
  * Option 2) read instrutions from file.
  * 
  *    java -cp src edu.nyu.cs.adb.Database <PATH_TO_INPUTFILE>
- * 
- * Option 3) read instructions from file and generate ouputs to file.
- * 
- *    java -cp src edu.nyu.cs.adb.Database <PATH_TO_INPUT> <PATH_TO_OUTPUT>
  *  
  * -----------------------------------------------------------------------
  * @author Jingxin Zhu (jz1371)
@@ -44,16 +40,13 @@ public class Database {
     
     if (args.length == 0) {
       tm = new TransactionManager();
-    } else if (args.length == 1) {
+    } else{
       tm = new TransactionManager(args[0]);
-    } else {
-      tm = new TransactionManager(args[0], args[1]);
     }
     
-    int nDatabaseManagers = 10;
-    
-    tm.init(nDatabaseManagers);
-    
+    int nDatabaseManagers = 10;    
+    tm.init(nDatabaseManagers);  
+    System.out.println("Database starts, use exit() to exit database >>");
     tm.run();
     
   }
