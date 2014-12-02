@@ -22,6 +22,7 @@ public class TransactionManager {
 
   private BufferedReader br;
   
+  //trace whether there is a transaction abort or commit
   private boolean commitOrAbort;
   
   // Map<Transaction id, Transaction>.
@@ -130,6 +131,8 @@ public class TransactionManager {
           List<Operation> operations = parseLine(line);
           batchExecute(operations);
         }
+        
+        //If there is a commit or abort, re-issue all the waiting operations
         while(commitOrAbort == true){
           commitOrAbort = false;
           for (int i = 0; i < waitingOperations.size(); i++) {
