@@ -78,8 +78,8 @@ public class TransactionManager {
    * Constructor with standard input .
    */
   public TransactionManager(String inputFile, String outputFile) {
-    br = new BufferedReader(new InputStreamReader(System.in));
     try {
+      br = new BufferedReader(new FileReader(inputFile));
       bw = new BufferedWriter(new FileWriter(outputFile));
     } catch (IOException e) {
       e.printStackTrace();
