@@ -6,12 +6,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 /**
- * Database Manager (DM) is responsible for local site, collaborating 
- * with Transaction Manager (TM).
+ * Database Manager (DM) is responsible for local site, for maintaining the lock
+ * table, updating variables, dealing with multiversion read consistency and
+ * dealing with failure and local recovery and collaborating with Transaction
+ * Manager (TM).
  * 
  * @author Jingxin Zhu
- * @author Wuping  Lei
+ * @author Wuping Lei
  *
  */
 public class DatabaseManager {
@@ -60,6 +63,7 @@ public class DatabaseManager {
 
   /**
    * Get site index of database manager
+   * 
    * @return
    */
   public int getIndex() {
@@ -68,6 +72,7 @@ public class DatabaseManager {
 
   /**
    * Get status of site
+   * 
    * @return true if site is up, false if site is down.
    */
   public boolean getStatus() {
@@ -76,6 +81,7 @@ public class DatabaseManager {
 
   /**
    * Set site status.
+   * 
    * @param status
    */
   public void setStatus(boolean status) {
@@ -141,9 +147,8 @@ public class DatabaseManager {
     }
   }
 
-  /** 
-   * Recover this site, for all the replicate variable, 
-   * makes them unavailable 
+  /**
+   * Recover this site, for all the replicate variable, makes them unavailable
    */
   public void recover() {
     _siteStatus = true;
@@ -272,7 +277,7 @@ public class DatabaseManager {
         }
       }
     }
-    //remove this transaction from accessed list
+    // remove this transaction from accessed list
     _accessedTransactions.remove(tid);
   }
 
@@ -298,7 +303,7 @@ public class DatabaseManager {
         }
       }
     }
-    //remove this transaction from accessed list
+    // remove this transaction from accessed list
     _accessedTransactions.remove(tid);
   }
 
@@ -458,8 +463,10 @@ public class DatabaseManager {
    * Given a variable index return the list of transaction ids that have
    * conflicts, i.e. other transactions have the lock on this variable.
    * 
-   * @param tid transaction id
-   * @param varIndex variable index
+   * @param tid
+   *          transaction id
+   * @param varIndex
+   *          variable index
    * @return list of transaction ids
    */
   public Set<Integer> getConflictTrans(int tid, int varIndex) {
@@ -470,7 +477,7 @@ public class DatabaseManager {
     if (_lockTable.containsKey(varIndex)) {
       List<Lock> lockList = _lockTable.get(varIndex);
       for (Lock lc : lockList) {
-        if(lc.getTranId() != tid){
+        if (lc.getTranId() != tid) {
           conflictSet.add(lc.getTranId());
         }
       }

@@ -132,6 +132,7 @@ public class TransactionManager {
   public void run() {
     try {
       while (true) {
+        //Reset this boolean
         commitOrAbortOrRecover = false;
         String line = br.readLine();
         if (line == null || line.contains("exit"))
@@ -244,6 +245,8 @@ public class TransactionManager {
         }
       }
       System.out.println("T" + tid + " is committed");
+      //If a Read-only transaction commits, check whether this is the last read-only
+      //If so, let all the DM clear all the old versions
       commitOrAbortOrRecover = true;
       committedTransactions.add(tid);
       if (transactions.containsKey(tid)) {
@@ -266,6 +269,7 @@ public class TransactionManager {
   public void fail(int siteIndex) {
     List<Integer> accessedTransactions = databaseManagers.get(siteIndex - 1)
         .getAccessedTransaction();
+    //If site fails, abort all the transaction accessed to the site
     for (Integer tid : accessedTransactions) {
       abortedTransactions.add(tid);
       abort(tid);
@@ -295,7 +299,7 @@ public class TransactionManager {
 
   /**
    * Print out current query state: committed transactions, aborted
-   * transactions, and running transactions.
+   * transactions, and running transactions and all the site status.
    */
   public void queryState() {
     System.out.print("Transactions committed: ");
@@ -317,11 +321,11 @@ public class TransactionManager {
     }
     System.out.println();
     System.out.println("Site status:");
-    for(DatabaseManager dm : databaseManagers){
+    for (DatabaseManager dm : databaseManagers) {
       System.out.print("Site" + dm.getIndex());
-      if(dm.getStatus()){
+      if (dm.getStatus()) {
         System.out.print("(Up); ");
-      }else{
+      } else {
         System.out.print("(down); ");
       }
     }
@@ -372,11 +376,13 @@ public class TransactionManager {
         allSitesDown = false;
         if (!dm.isWritable(oper.getTranId(), varIndex)) {
           writable = false;
+          //If have conflict, add all conflict transaction ids into conflictTranSet
           conflictTranSet.addAll(dm.getConflictTrans(oper.getTranId(),
               varIndex));
         }
       }
     }
+    //If no conflict and not all sites are down
     if (writable && !allSitesDown) {
       for (Integer siteIndex : sites) {
         DatabaseManager dm = databaseManagers.get(siteIndex - 1);
@@ -386,22 +392,27 @@ public class TransactionManager {
         }
       }
     } else {
-      int oldest = getOldestTime(conflictTranSet);
+      //Get the oldest transaction from conflictTranSet, if get a null object,
+      //indicates no conflict and all sites are down which makes the transaction wait
+      //This is the only place where waitDieProtocol will have a null transaction as parameter
+      Transaction oldest = getOldestTransaction(conflictTranSet);
       waitDieProtocol(oper, oldest);
     }
   }
 
-  // Get the oldest time stamp from all given conflicting transactions.
-  private int getOldestTime(Set<Integer> conflictTranSet) {
+  // Get the oldest transaction from all given conflicting transactions.
+  // If conflictTranset is empty, return null
+  private Transaction getOldestTransaction(Set<Integer> conflictTranSet) {
     int result = timestamp + 1;
-    Iterator<Integer> it = conflictTranSet.iterator();
-    while (it.hasNext()) {
-      int time = transactions.get(it.next()).getTimestamp();
+    Transaction oldest = null;
+    for (Integer tid : conflictTranSet) {
+      int time = transactions.get(tid).getTimestamp();
       if (time < result) {
         result = time;
+        oldest = transactions.get(tid);
       }
     }
-    return result;
+    return oldest;
   }
 
   /**
@@ -423,20 +434,28 @@ public class TransactionManager {
       if (dm.getStatus()) {
         Data data = dm.read(transactions.get(tranid), varIndex);
         if (data != null) {
-          System.out.println("T" + tranid + " reads x:" + varIndex + " "
+          System.out.println("T" + tranid + " reads x" + varIndex + ": "
               + data.getValue() + " at site " + dm.getIndex());
           return;
         } else if (dm.getConflictTrans(tranid, varIndex) != null
             && dm.getConflictTrans(tranid, varIndex).size() != 0) {
+          
+          //If the Data returned is null, either because conflict or Data is unavailable
+          //If Data is unavailable, there will be no conflict
+          //If conflicts, can only conflict with one transaction who has the write Lock
           Iterator<Integer> it = dm.getConflictTrans(tranid, varIndex)
               .iterator();
           int tid = it.next();
-          waitDieProtocol(operation, transactions.get(tid).getTimestamp());
+          waitDieProtocol(operation, transactions.get(tid));
           return;
         }
       }
     }
-    System.out.println("T" + operation.getTranId() + " should wait");
+    System.out
+        .println("T"
+            + operation.getTranId()
+            + " should wait because all the sites are down or all the variable are unavailable." 
+            + "(" + operation.toString() + ")");
     waitingOperations.offer(operation);
   }
 
@@ -448,14 +467,23 @@ public class TransactionManager {
    * 
    * @param t
    */
-  private boolean waitDieProtocol(Operation oper, int t) {
-    if (transactions.get(oper.getTranId()).getTimestamp() < t) {
+  private boolean waitDieProtocol(Operation oper, Transaction t) {
+    //If transaction is null, only happens when all sites are down
+    if (t == null) {
+      System.out.println("T" + oper.getTranId()
+          + " should wait because all the sites are down. " + "(" + oper.toString() + ")");
+      waitingOperations.offer(oper);
+      return true;
+    }
+    if (transactions.get(oper.getTranId()).getTimestamp() < t.getTimestamp()) {
       // should wait
-      System.out.println("T" + oper.getTranId() + " should wait");
+      System.out.println("T" + oper.getTranId() + " should wait for T"
+          + t.getTranId() + " (" + oper.toString() + ")");
       waitingOperations.offer(oper);
       return true;
     } else {
-      System.out.println("T" + oper.getTranId() + " should abort");
+      System.out.println("T" + oper.getTranId() + " should abort because T"
+          + t.getTranId() + " is older (" + oper.toString() + ")");
       abort(oper.getTranId());
       return false;
     }
