@@ -1,47 +1,49 @@
 package edu.nyu.cs.adb;
 
 class Lock {
-  static enum Type{
-    READ,
-    WRITE,
+  static enum Type {
+    READ, WRITE,
   };
-  
+
   private int _transactionId;
   private Type _type;
-  
-  public Lock(int tid, Type type){
+
+  public Lock(int tid, Type type) {
     _transactionId = tid;
     _type = type;
   }
-  
-  public int getTranId(){
+
+  public int getTranId() {
     return _transactionId;
   }
-  
-  public Type getType(){
+
+  public Type getType() {
     return _type;
   }
-  
-  public void escalateLock(){
+
+  /*
+   * escalate Lock, used when some transaction hold the read lock and want to
+   * escalate to write lock for the same variable
+   */
+  public void escalateLock() {
     _type = Type.WRITE;
   }
-  
+
   @Override
-  public boolean equals(Object o){
+  public boolean equals(Object o) {
     if (this == o)
       return true;
     if (o == null || !(o instanceof Lock))
       return false;
     Lock lc = (Lock) o;
-    return _transactionId == lc._transactionId 
-        && _type == lc._type;
+    return _transactionId == lc._transactionId && _type == lc._type;
   }
-  
+
   @Override
-  public int hashCode(){
+  public int hashCode() {
     int result = 17;
     result = 31 * result + Integer.valueOf(_transactionId).hashCode();
     result = 31 * result + _type.hashCode();
-    return result; 
+    return result;
   }
 }

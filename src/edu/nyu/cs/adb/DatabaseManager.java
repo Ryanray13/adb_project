@@ -9,13 +9,26 @@ import java.util.Set;
 
 public class DatabaseManager {
 
+  // indicate whether site is up or down
   private boolean _siteStatus;
+
   private int _siteIndex;
   private TransactionManager _tm;
+
+  // record the last time that the site fails
   private int _lastFailTime;
+
+  // Map that stores all the data this site has, including multiversion
   private Map<Integer, List<Data>> _dataMap = new HashMap<Integer, List<Data>>();
+
+  // Map that store all the dirty Data that written by some transactions before
+  // commit
   private Map<Integer, Data> _uncommitDataMap = new HashMap<Integer, Data>();
+
+  // lock table maintained by this site
   private Map<Integer, List<Lock>> _lockTable = new HashMap<Integer, List<Lock>>();
+
+  // Set of all the transactions accessed in this site
   private Set<Integer> _accessedTransactions = new HashSet<Integer>();
 
   public DatabaseManager(int index, TransactionManager tm) {
@@ -25,6 +38,9 @@ public class DatabaseManager {
     _lastFailTime = -1;
   }
 
+  /**
+   * initialize the dataMap based on the site index.
+   */
   public void init() {
     for (int i = 1; i <= 20; i++) {
       List<Data> dataList = new ArrayList<Data>();
@@ -34,7 +50,7 @@ public class DatabaseManager {
       }
     }
   }
-  
+
   public int getIndex() {
     return _siteIndex;
   }
@@ -47,7 +63,7 @@ public class DatabaseManager {
     _siteStatus = status;
   }
 
-  /* set corresponding lock for given variable */
+  /* Set corresponding lock for given variable */
   private void setLock(int tid, int varIndex, Lock.Type type) {
     List<Lock> lockList = null;
     if (_lockTable.containsKey(varIndex)) {
@@ -60,7 +76,10 @@ public class DatabaseManager {
     }
   }
 
-  /* Get the corresponding lock for given variable and given transaction */
+  /*
+   * Get the corresponding lock for given variable and given transaction If the
+   * transaction holds no lock return null
+   */
   private Lock getLock(int tid, int varIndex) {
     if (_lockTable.containsKey(varIndex)) {
       List<Lock> lockList = _lockTable.get(varIndex);
@@ -73,7 +92,10 @@ public class DatabaseManager {
     return null;
   }
 
-  /* check whether there is conflict with that tid */
+  /*
+   * Check whether there is conflict with the transaction on the variable i.e.
+   * whether the transaction can get the lock it wants
+   */
   private boolean hasConflict(int tid, int varIndex, Lock.Type type) {
     if (!_lockTable.containsKey(varIndex)) {
       return false;
@@ -81,6 +103,8 @@ public class DatabaseManager {
     List<Lock> lockList = _lockTable.get(varIndex);
     if (type == Lock.Type.READ) {
       for (Lock lc : lockList) {
+        // The only conflict with read is some other transaction has a write
+        // lock
         if (lc.getTranId() != tid && lc.getType() == Lock.Type.WRITE) {
           return true;
         }
@@ -88,6 +112,8 @@ public class DatabaseManager {
       return false;
     } else {
       for (Lock lc : lockList) {
+        // As long as other transaction holds a lock, it will conflict with
+        // write
         if (lc.getTranId() != tid) {
           return true;
         }
@@ -96,7 +122,7 @@ public class DatabaseManager {
     }
   }
 
-  /** recover this site */
+  /** recover this site, for all the replicate variable, makes them unavailable */
   public void recover() {
     _siteStatus = true;
     for (Integer varIndex : _dataMap.keySet()) {
@@ -104,13 +130,20 @@ public class DatabaseManager {
       if (varIndex % 2 == 0) {
         dataList = _dataMap.get(varIndex);
         Data d = dataList.get(dataList.size() - 1);
+        // set the last commit variable to unavailable to read
         d.setAccess(false);
+        // set the unavailable time for the variable which is the time it fails
+        // When a particular version of variable is unavailable, it will never
+        // become available, but we may have new version of variable
         d.setUnavailableTime(_lastFailTime);
       }
     }
   }
 
-  /** fail this site, clear the lock table */
+  /**
+   * Set the site status to false, clear the lock table, accessedTransaction,
+   * uncommitDataMap etc
+   */
   public void fail() {
     _siteStatus = false;
     _lockTable.clear();
@@ -120,7 +153,7 @@ public class DatabaseManager {
   }
 
   /**
-   * Return the data map this site has
+   * Return the data map this site has, used for dump all the variables
    * 
    * @return dataMap
    */
@@ -147,6 +180,7 @@ public class DatabaseManager {
    * Given a variable index, get the committed values of the variable.
    * 
    * @param varIndex
+   *          variable index
    * @return data
    */
   public Data dump(int varIndex) {
@@ -164,7 +198,8 @@ public class DatabaseManager {
   }
 
   /**
-   * clear all the old copies of the variable on this site
+   * When there is no read-only transaction runnning, clear all the old version
+   * of all the variables on this site
    */
   public void clearAllVersions() {
     for (Integer varIndex : _dataMap.keySet()) {
@@ -176,13 +211,16 @@ public class DatabaseManager {
   }
 
   /**
-   * Commit the given transaction, write all the values in site And release all
-   * the lock it holds
+   * Commit the given transaction, write all the values in uncommitDataMap to
+   * dataMap and release all the lock it holds
    * 
-   * @param tid transaction id
+   * @param tid
+   *          transaction id
    */
   public void commit(int tid) {
     List<Lock> lockList = null;
+
+    // check wheter there is read-only transaction running
     boolean hasRO = _tm.hasRunningReadonly();
     for (Integer varIndex : _lockTable.keySet()) {
       lockList = _lockTable.get(varIndex);
@@ -190,11 +228,16 @@ public class DatabaseManager {
       for (int i = size - 1; i >= 0; i--) {
         Lock lc = lockList.get(i);
         if (lc.getTranId() == tid) {
+
+          // If the lock type is write, means this transaction writes a variable
+          // in uncommitDataMap
           if (lc.getType() == Lock.Type.WRITE) {
             if (_uncommitDataMap.containsKey(varIndex)) {
               List<Data> dataList = _dataMap.get(varIndex);
               Data d = _uncommitDataMap.get(varIndex);
               d.setCommitTime(_tm.getCurrentTime());
+
+              // If no read-only transaction, replace the old version
               if (!hasRO) {
                 dataList.clear();
               }
@@ -210,9 +253,11 @@ public class DatabaseManager {
   }
 
   /**
-   * Abort the given transaction, release all the locks it holds
+   * Abort the given transaction, release all the locks it holds And erase the
+   * data it has written
    * 
-   * @param tid transaction id
+   * @param tid
+   *          transaction id
    */
   public void abort(int tid) {
     List<Lock> lockList = null;
@@ -221,7 +266,7 @@ public class DatabaseManager {
       int size = lockList.size();
       for (int i = size - 1; i >= 0; i--) {
         if (lockList.get(i).getTranId() == tid) {
-          if(lockList.get(i).getType() == Lock.Type.WRITE){
+          if (lockList.get(i).getType() == Lock.Type.WRITE) {
             _uncommitDataMap.remove(varIndex);
           }
           lockList.remove(i);
@@ -232,10 +277,16 @@ public class DatabaseManager {
   }
 
   /**
-   * Given a variable index, read the data, if fails return null
+   * Given a variable index, read the data, if fails return null. Otherwise
+   * return the variable update lock table and put the transaction into
+   * accessedTransactions. Read only transaction would read the version it
+   * needs. If a transaction has written this variable, reads it from
+   * uncommitMapData
    * 
    * @param t
+   *          transaction
    * @param varIndex
+   *          variable index
    * @return data
    */
   public Data read(Transaction t, int varIndex) {
@@ -243,7 +294,9 @@ public class DatabaseManager {
       return null;
     }
     int tid = t.getTranId();
-    
+
+    // If the transaction is read-write, get the lock and see whether we have
+    // conflict
     if (t.getType() == Transaction.Type.RW) {
       boolean hasConflict = false;
       Lock lock = null;
@@ -265,40 +318,51 @@ public class DatabaseManager {
       } else {
         if (lock == null || lock.getType() == Lock.Type.READ) {
           Data d = getLastCommitData(varIndex);
+          // If the variable is available return the variable
           if (d.getAccess()) {
+            // If the transaction dosen't have a lock, set read lock
             if (lock == null) {
               setLock(tid, varIndex, Lock.Type.READ);
             }
+            // Add this transaction to accessed transactions list
             _accessedTransactions.add(tid);
             return d;
-          }else{
+          } else {
             return null;
           }
         } else {
+          // if transaction has write lock, read it from uncommitDataMap
           _accessedTransactions.add(tid);
           return _uncommitDataMap.get(varIndex);
         }
       }
     } else {
+      // For read-only transaction, get last commit version before it starts.
       List<Data> dataList = _dataMap.get(varIndex);
       Data d = null;
       int ttime = t.getTimestamp();
-      for(Data dt : dataList){
-        if(dt.getCommitTime() <= ttime){
+      for (Data dt : dataList) {
+        if (dt.getCommitTime() <= ttime) {
           d = dt;
-        }else{
+        } else {
           break;
         }
       }
-      if(d == null){
+      if (d == null) {
         return null;
       }
-      if(d.getAccess()){
+      // if available return the variable
+      if (d.getAccess()) {
+        return d;
+      } else {
+        // if not available, check whether it becomes unavailable (site fails)
+        // after the read-only transaction begins, if so, the data is still
+        // readable.
+        if (d.getUnavailableTime() >= ttime) {
           return d;
-      }else{
-        if(d.getUnavailableTime() >= ttime ){
-          return d;
-        }else{
+        } else {
+          // Otherwise, cannot be sure that the variable is the last commit
+          // before read-only transaction begins
           return null;
         }
       }
@@ -307,12 +371,15 @@ public class DatabaseManager {
 
   /**
    * Given a variable index, value to write and transaction, update the variable
-   * set the lock But since we use redo, no undo thus we update it in
-   * transaction first, when commit writes all the values into database
+   * and set the lock. But we update it in uncommitDataMap before commit, when
+   * commit, writes all the values into dataMap
    * 
    * @param t
+   *          transaction id
    * @param varIndex
+   *          variable index
    * @param value
+   *          the value to write into variable
    */
   public void write(Transaction t, int varIndex, int value) {
     int tid = t.getTranId();
@@ -321,13 +388,16 @@ public class DatabaseManager {
       return;
     }
     if (lc == null) {
+      // if transaction holds no lock, set write lock
       setLock(tid, varIndex, Lock.Type.WRITE);
     } else {
+      // if transaction holds read lock before, escalate that lock
       if (lc.getType() == Lock.Type.READ) {
         lc.escalateLock();
       }
     }
     _accessedTransactions.add(tid);
+    // put it into uncommitDataMap
     if (_uncommitDataMap.containsKey(varIndex)) {
       Data d = _uncommitDataMap.get(varIndex);
       d.setValue(value);
@@ -339,25 +409,28 @@ public class DatabaseManager {
 
   /**
    * Given a variable index and transaction, check whether the transaction can
-   * write the variable, i.e. whether it can get the lock
+   * write the variable, i.e. whether it can get the lock. If can, then get the
+   * lock
    * 
    * @param tid
+   *          transaction id
    * @param varIndex
+   *          variable index
    * @return true if can write, false if can't
    */
   public boolean isWritable(int tid, int varIndex) {
-    if(!hasConflict(tid, varIndex, Lock.Type.WRITE)){
+    if (!hasConflict(tid, varIndex, Lock.Type.WRITE)) {
       setLock(tid, varIndex, Lock.Type.WRITE);
       _accessedTransactions.add(tid);
       return true;
-    }else{
+    } else {
       return false;
     }
   }
 
   /**
    * Given a variable index return the list of transaction ids that have
-   * conflicts, i.e. have the lock on this variable.
+   * conflicts, i.e. other transactions have the lock on this variable.
    * 
    * @param varIndex
    * @return list of transaction ids

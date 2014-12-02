@@ -11,8 +11,8 @@ public class Database {
       tm = new TransactionManager();
     } else if (args.length == 1) {
       tm = new TransactionManager(args[0]);
-    }else{
-      tm = new TransactionManager(args[0],args[1]);
+    } else {
+      tm = new TransactionManager(args[0], args[1]);
     }
     tm.init(10);
     tm.run();

@@ -23,13 +23,13 @@ public class TransactionManager {
   // Global time stamp
   private int timestamp;
 
-  //General input reader
+  // General input reader
   private BufferedReader br;
 
-  //General output writer
+  // General output writer
   private BufferedWriter bw;
 
-  //indicate whether use standard output or not
+  // indicate whether use standard output or not
   private boolean stdout;
 
   // trace whether there is a transaction abort or commit
@@ -73,7 +73,7 @@ public class TransactionManager {
       System.err.println(e.getMessage());
     }
   }
-  
+
   /**
    * Constructor with standard input .
    */
@@ -143,8 +143,8 @@ public class TransactionManager {
   }
 
   /**
-   * Read contents from standard input or input file. Parse instructions,
-   * and then execute operations accordingly.
+   * Read contents from standard input or input file. Parse instructions, and
+   * then execute operations accordingly.
    */
   public void run() {
     try {
@@ -193,7 +193,7 @@ public class TransactionManager {
         try {
           bw.write("Unexpected: " + instruction);
           bw.newLine();
-          if(stdout){
+          if (stdout) {
             bw.flush();
           }
         } catch (IOException e) {
@@ -227,7 +227,7 @@ public class TransactionManager {
         try {
           bw.write("Unexpected input: " + instruction);
           bw.newLine();
-          if(stdout){
+          if (stdout) {
             bw.flush();
           }
         } catch (IOException e) {
@@ -245,7 +245,7 @@ public class TransactionManager {
    * 
    * @param tidStr string that containing transaction id.
    */
-  private void beginTransaction(String type, String tidStr) {
+  public void beginTransaction(String type, String tidStr) {
     int tid = parseTransactionId(tidStr);
     if (transactions.containsKey(tid))
       return;
@@ -259,13 +259,13 @@ public class TransactionManager {
   }
 
   /*
-   * Notify database managers to commit given transaction if that
-   * transaction has not been aborted and put that into committed list. If
-   * RO commits and no more RO left, then clear all the copies in DMs.
+   * Notify database managers to commit given transaction if that transaction
+   * has not been aborted and put that into committed list. If RO commits and no
+   * more RO left, then clear all the copies in DMs.
    * 
    * @param tidStr
    */
-  private void endTransaction(String tidStr) {
+  public void endTransaction(String tidStr) {
     int tid = parseTransactionId(tidStr);
     if (!hasAborted(tid)) {
       for (DatabaseManager dm : databaseManagers) {
@@ -287,12 +287,12 @@ public class TransactionManager {
   }
 
   /*
-   * Let the site at given index fail. Abort all transactions that have
-   * accessed that site immediately.
+   * Let the site at given index fail. Abort all transactions that have accessed
+   * that site immediately.
    * 
    * @param siteIndex
    */
-  private void fail(int siteIndex) {
+  public void fail(int siteIndex) {
     List<Integer> accessedTransactions = databaseManagers.get(siteIndex - 1)
         .getAccessedTransaction();
     for (Integer tid : accessedTransactions) {
@@ -307,12 +307,12 @@ public class TransactionManager {
    * 
    * @param index
    */
-  private void recover(int index) {
+  public void recover(int index) {
     databaseManagers.get(index - 1).recover();
   }
 
   /* Restart database, clear current states. */
-  private void restart() {
+  public void restart() {
     init(10);
     timestamp = -1;
     transactions.clear();
@@ -325,7 +325,7 @@ public class TransactionManager {
    * Print out current query state: committed transactions, aborted
    * transactions, and running transactions.
    */
-  private void queryState() {
+  public void queryState() {
     try {
       bw.write("Transactions committed:\n");
       for (Integer t : committedTransactions) {
@@ -345,7 +345,7 @@ public class TransactionManager {
         }
       }
       bw.write("\n");
-      if(stdout){
+      if (stdout) {
         bw.flush();
       }
     } catch (IOException e) {
@@ -381,7 +381,7 @@ public class TransactionManager {
    * 
    * @param oper
    */
-  private void write(Operation oper) {
+  public void write(Operation oper) {
     if (hasAborted(oper.getTranId())) {
       return;
     }
@@ -459,8 +459,8 @@ public class TransactionManager {
   }
 
   /*
-   * If the transaction associated with given operation is older than given
-   * t, then given operation should "wait". Otherwise, abort transaction.
+   * If the transaction associated with given operation is older than given t,
+   * then given operation should "wait". Otherwise, abort transaction.
    * 
    * @param oper
    * 
@@ -489,12 +489,12 @@ public class TransactionManager {
   }
 
   // Print all committed values af each variable at each site.
-  private void dump() {
+  public void dump() {
     for (DatabaseManager dm : databaseManagers) {
       try {
         bw.write("Site: " + dm.getIndex());
         bw.newLine();
-        if(stdout){
+        if (stdout) {
           bw.flush();
         }
       } catch (IOException e) {
@@ -505,7 +505,7 @@ public class TransactionManager {
   }
 
   // Print all committed values of all variables at given site.
-  private void dumpSite(int siteIndex) {
+  public void dumpSite(int siteIndex) {
     Map<Integer, Data> siteVars = databaseManagers.get(siteIndex - 1)
         .getDataMap();
     List<Integer> indexList = new ArrayList<Integer>(siteVars.keySet());
@@ -514,7 +514,7 @@ public class TransactionManager {
       try {
         bw.write("x" + varIndex + ": " + siteVars.get(varIndex).getValue());
         bw.newLine();
-        if(stdout){
+        if (stdout) {
           bw.flush();
         }
       } catch (IOException e) {
@@ -524,7 +524,7 @@ public class TransactionManager {
   }
 
   // Print all committed values of given variable.
-  private void dumpVar(int varIndex) {
+  public void dumpVar(int varIndex) {
     for (DatabaseManager dm : databaseManagers) {
       Data data = dm.dump(varIndex);
       if (data != null) {
@@ -532,7 +532,7 @@ public class TransactionManager {
           bw.write("x" + varIndex + ": " + data.getValue() + " at site "
               + dm.getIndex());
           bw.newLine();
-          if(stdout){
+          if (stdout) {
             bw.flush();
           }
         } catch (IOException e) {
@@ -546,7 +546,7 @@ public class TransactionManager {
    * Notify database managers to abort given transaction and put that
    * transaction put into aborted list.
    */
-  private void abort(int tid) {
+  public void abort(int tid) {
     for (DatabaseManager dm : databaseManagers) {
       if (dm.getStatus()) {
         dm.abort(tid);
