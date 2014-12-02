@@ -1,0 +1,11 @@
+//Input 3
+begin(T1)
+begin(T2)
+fail(2);fail(4)
+R(T1,x1)
+R(T2,x3)
+recover(4)
+W(T2,x3,88)
+end(T2)
+recover(x1)
+end(T1)
