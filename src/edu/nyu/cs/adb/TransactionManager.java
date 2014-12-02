@@ -32,7 +32,7 @@ public class TransactionManager {
   private BufferedReader br;
 
   // trace whether there is a transaction abort or commit
-  private boolean commitOrAbort;
+  private boolean commitOrAbortOrRecover;
 
   // Map<Transaction id, Transaction>.
   private Map<Integer, Transaction> transactions = new HashMap<Integer, Transaction>();
@@ -131,7 +131,7 @@ public class TransactionManager {
   public void run() {
     try {
       while (true) {
-        commitOrAbort = false;
+        commitOrAbortOrRecover = false;
         String line = br.readLine();
         if (line == null || line.contains("exit"))
           break;
@@ -144,8 +144,8 @@ public class TransactionManager {
 
         // If there is a commit or abort, re-issue all the waiting
         // operations
-        while (commitOrAbort == true) {
-          commitOrAbort = false;
+        while (commitOrAbortOrRecover == true) {
+          commitOrAbortOrRecover = false;
           for (int i = 0; i < waitingOperations.size(); i++) {
             execute(waitingOperations.poll());
           }
@@ -242,7 +242,7 @@ public class TransactionManager {
         }
       }
       System.out.println("T" + tid + " is committed");
-      commitOrAbort = true;
+      commitOrAbortOrRecover = true;
       committedTransactions.add(tid);
       if (transactions.containsKey(tid)) {
         if (transactions.get(tid).getType() == Transaction.Type.RO
@@ -278,6 +278,7 @@ public class TransactionManager {
    */
   public void recover(int index) {
     databaseManagers.get(index - 1).recover();
+    commitOrAbortOrRecover = true;
   }
 
   /** Restart database, clear current states. */
@@ -526,7 +527,7 @@ public class TransactionManager {
       }
     }
     abortedTransactions.add(tid);
-    commitOrAbort = true;
+    commitOrAbortOrRecover = true;
   }
 
   // Return all sites that storing given variable.
