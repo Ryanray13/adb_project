@@ -1,0 +1,10 @@
+// Input 2
+// After site 2 fails, R(T1, x1), W(T1, x1, 88) will wait 
+// after site recovers, they will be executed.
+begin(T1)
+fail(2)
+R(T1,x1)
+W(T1,x1,88)
+recover(2)
+
+end(T1)
