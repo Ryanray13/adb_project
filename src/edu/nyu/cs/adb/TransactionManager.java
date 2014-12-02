@@ -3,6 +3,7 @@ package edu.nyu.cs.adb;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -71,6 +72,19 @@ public class TransactionManager {
     } catch (Exception e) {
       System.err.println(e.getMessage());
     }
+  }
+  
+  /**
+   * Constructor with standard input .
+   */
+  public TransactionManager(String inputFile, String outputFile) {
+    br = new BufferedReader(new InputStreamReader(System.in));
+    try {
+      bw = new BufferedWriter(new FileWriter(outputFile));
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    stdout = false;
   }
 
   /**
