@@ -31,7 +31,8 @@ public class TransactionManager {
   // General input reader
   private BufferedReader br;
 
-  // trace whether there is a transaction abort or commit
+  // trace whether there is a transaction abort or commit or site recover
+  // Which might cause waiting transaction be able to execute
   private boolean commitOrAbortOrRecover;
 
   // Map<Transaction id, Transaction>.
@@ -142,11 +143,12 @@ public class TransactionManager {
           batchExecute(operations);
         }
 
-        // If there is a commit or abort, re-issue all the waiting
+        // If there is a commit or abort or restart, re-issue all the waiting
         // operations
         while (commitOrAbortOrRecover == true) {
           commitOrAbortOrRecover = false;
-          for (int i = 0; i < waitingOperations.size(); i++) {
+          int size = waitingOperations.size();
+          for (int i = 0; i < size; i++) {
             execute(waitingOperations.poll());
           }
         }
@@ -434,6 +436,7 @@ public class TransactionManager {
         }
       }
     }
+    System.out.println("T" + operation.getTranId() + " should wait");
     waitingOperations.offer(operation);
   }
 
