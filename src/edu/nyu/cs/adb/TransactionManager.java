@@ -18,6 +18,14 @@ import java.util.ArrayList;
 import java.util.Queue;
 import java.util.Set;
 
+/**
+ * Transaction manager (TM) acts as the interface between database 
+ * user and database. TM takes the input from user and execute it 
+ * accordingly together with database managers (DM).
+ * 
+ * @author Jingxin Zhu
+ * @author Wuping  Lei
+ */
 public class TransactionManager {
 
   // Global time stamp
@@ -82,7 +90,7 @@ public class TransactionManager {
       br = new BufferedReader(new FileReader(inputFile));
       bw = new BufferedWriter(new FileWriter(outputFile));
     } catch (IOException e) {
-      e.printStackTrace();
+      System.err.println(e.getMessage());
     }
     stdout = false;
   }
@@ -143,8 +151,8 @@ public class TransactionManager {
   }
 
   /**
-   * Read contents from standard input or input file. Parse instructions, and
-   * then execute operations accordingly.
+   * Read contents from standard input or input file. Parse instructions,
+   * and then execute operations accordingly.
    */
   public void run() {
     try {
@@ -182,6 +190,7 @@ public class TransactionManager {
    * "end", "fail", "recover" immediately.
    */
   private List<Operation> parseLine(String line) {
+    line = line.toLowerCase();
     String[] instructions = line.replaceAll("\\s+", "").split(";");
     List<Operation> result = new ArrayList<Operation>();
     for (String instruction : instructions) {
@@ -205,7 +214,7 @@ public class TransactionManager {
       arg = instruction.substring(tokenEnd + 1, argsEnd);
       if (token.equals("begin")) {
         beginTransaction("RW", arg);
-      } else if (token.equals("beginRO")) {
+      } else if (token.equals("beginro")) {
         beginTransaction("RO", arg);
       } else if (token.equals("end")) {
         endTransaction(arg);
@@ -213,9 +222,9 @@ public class TransactionManager {
         fail(parseSiteIndex(arg));
       } else if (token.equals("recover")) {
         recover(parseSiteIndex(arg));
-      } else if (token.equals("R")) {
+      } else if (token.equals("r")) {
         result.add(parseReadOperation(arg));
-      } else if (token.equals("W")) {
+      } else if (token.equals("w")) {
         result.add(parseWriteOperation(arg));
       } else if (token.equals("dump")) {
         parseDump(arg);
@@ -238,7 +247,7 @@ public class TransactionManager {
     return result;
   }
 
-  /*
+  /**
    * Parse transaction id from tidStr and then create new transaction.
    * 
    * @param type READ_ONLY or READ_WRITE
@@ -258,7 +267,7 @@ public class TransactionManager {
     }
   }
 
-  /*
+  /**
    * Notify database managers to commit given transaction if that transaction
    * has not been aborted and put that into committed list. If RO commits and no
    * more RO left, then clear all the copies in DMs.
@@ -286,7 +295,7 @@ public class TransactionManager {
     }
   }
 
-  /*
+  /**
    * Let the site at given index fail. Abort all transactions that have accessed
    * that site immediately.
    * 
@@ -302,7 +311,7 @@ public class TransactionManager {
     databaseManagers.get(siteIndex - 1).fail();
   }
 
-  /*
+  /**
    * Recovery site at given index.
    * 
    * @param index
@@ -311,7 +320,7 @@ public class TransactionManager {
     databaseManagers.get(index - 1).recover();
   }
 
-  /* Restart database, clear current states. */
+  /** Restart database, clear current states. */
   public void restart() {
     init(10);
     timestamp = -1;
@@ -321,7 +330,7 @@ public class TransactionManager {
     waitingOperations.clear();
   }
 
-  /*
+  /**
    * Print out current query state: committed transactions, aborted
    * transactions, and running transactions.
    */
@@ -378,7 +387,8 @@ public class TransactionManager {
   }
 
   /**
-   * 
+   * Try to execute write operation. If succeed, write the value to sites.
+   * Otherwise, decide the transaction to wait or die. 
    * @param oper
    */
   public void write(Operation oper) {
@@ -414,6 +424,7 @@ public class TransactionManager {
     }
   }
 
+  // Get the oldest time stamp from all given conflicting transactions.
   private int getOldestTime(Set<Integer> conflictTranSet) {
     int result = timestamp + 1;
     Iterator<Integer> it = conflictTranSet.iterator();
@@ -427,7 +438,8 @@ public class TransactionManager {
   }
 
   /**
-   * 
+   * Try to execute read operation. If succeed, read the value. Otherwise,
+   * decide transaction to wait or die.
    * @param operation
    */
   public void read(Operation operation) {
@@ -542,9 +554,10 @@ public class TransactionManager {
     }
   }
 
-  /*
+  /**
    * Notify database managers to abort given transaction and put that
    * transaction put into aborted list.
+   * @param tid transaction id
    */
   public void abort(int tid) {
     for (DatabaseManager dm : databaseManagers) {
@@ -560,7 +573,7 @@ public class TransactionManager {
   private List<Integer> getSites(int varIndex) {
     return variableMap.get(varIndex);
   }
-
+  
   private boolean hasAborted(int tid) {
     return abortedTransactions.contains(tid);
   }

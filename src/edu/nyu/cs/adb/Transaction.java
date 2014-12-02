@@ -1,5 +1,12 @@
 package edu.nyu.cs.adb;
 
+/**
+ * This class encapsulate the transaction in database.
+ * 
+ * @author Jingxin Zhu
+ * @author Wuping  Lei
+ *
+ */
 public class Transaction {
 
   public static enum Type {

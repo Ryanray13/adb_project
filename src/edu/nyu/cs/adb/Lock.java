@@ -1,6 +1,14 @@
 package edu.nyu.cs.adb;
 
+/**
+ * This class abstracts the lock for variables, including
+ * read lock and write lock.
+ * @author Jingxin Zhu
+ * @author Wuping  Lei
+ *
+ */
 class Lock {
+  
   static enum Type {
     READ, WRITE,
   };
@@ -13,10 +21,18 @@ class Lock {
     _type = type;
   }
 
+  /**
+   * Get transaction id.
+   * @return
+   */
   public int getTranId() {
     return _transactionId;
   }
 
+  /**
+   * Get lock type.
+   * @return
+   */
   public Type getType() {
     return _type;
   }

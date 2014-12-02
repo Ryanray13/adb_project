@@ -6,7 +6,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
+/**
+ * Database Manager (DM) is responsible for local site, collaborating 
+ * with Transaction Manager (TM).
+ * 
+ * @author Jingxin Zhu
+ * @author Wuping  Lei
+ *
+ */
 public class DatabaseManager {
 
   // indicate whether site is up or down
@@ -51,14 +58,26 @@ public class DatabaseManager {
     }
   }
 
+  /**
+   * Get site index of database manager
+   * @return
+   */
   public int getIndex() {
     return _siteIndex;
   }
 
+  /**
+   * Get status of site
+   * @return true if site is up, false if site is down.
+   */
   public boolean getStatus() {
     return _siteStatus;
   }
 
+  /**
+   * Set site status.
+   * @param status
+   */
   public void setStatus(boolean status) {
     _siteStatus = status;
   }
@@ -122,7 +141,10 @@ public class DatabaseManager {
     }
   }
 
-  /** recover this site, for all the replicate variable, makes them unavailable */
+  /** 
+   * Recover this site, for all the replicate variable, 
+   * makes them unavailable 
+   */
   public void recover() {
     _siteStatus = true;
     for (Integer varIndex : _dataMap.keySet()) {

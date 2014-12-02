@@ -1,5 +1,12 @@
 package edu.nyu.cs.adb;
 
+/**
+ * Data class abstracts the variable stored in database.
+ * 
+ * @author Jingxin Zhu
+ * @author Wuping  Lei
+ *
+ */
 public class Data {
   private int _value;
   private int _index;
@@ -17,38 +24,74 @@ public class Data {
     unavailableTime = -1;
   }
 
+  /**
+   * Set variable value
+   * @param value
+   */
   public void setValue(int value) {
     _value = value;
   }
 
+  /**
+   * Get the value
+   * @return
+   */
   public int getValue() {
     return _value;
   }
 
+  /**
+   * Set the access status of data.
+   * @param access
+   */
   public void setAccess(boolean access) {
     _accessible = access;
   }
 
+  /**
+   * Get access status of data
+   * @return true if data can be accessed. 
+   */
   public boolean getAccess() {
     return _accessible;
   }
 
+  /**
+   * Set committed time for data.
+   * @param time
+   */
   public void setCommitTime(int time) {
     _commitTime = time;
   }
 
+  /**
+   * Get committed time for data.
+   * @return
+   */
   public int getCommitTime() {
     return _commitTime;
   }
 
+  /**
+   * Get variable index of data.
+   * @return
+   */
   public int getIndex() {
     return _index;
   }
 
+  /**
+   * Get unavailable time.
+   * @return
+   */
   public int getUnavailableTime() {
     return unavailableTime;
   }
 
+  /**
+   * Set unavailable time
+   * @param time
+   */
   public void setUnavailableTime(int time) {
     //A Data only have one time becoming unavailable
     if (unavailableTime == -1) {

@@ -1,5 +1,12 @@
 package edu.nyu.cs.adb;
 
+/**
+ * This class encapsulates the READ and WRITE operation in database.
+ * 
+ * @author Jingxin Zhu
+ * @author Wuping  Lei
+ *
+ */
 public class Operation {
 
   public static enum Type {
