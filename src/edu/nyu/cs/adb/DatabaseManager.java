@@ -96,24 +96,6 @@ public class DatabaseManager {
     }
   }
 
-  /*
-   * release all the lock held by given transaction when transaction abort or
-   * commit
-   */
-  private void releaseAllLocks(int tid) {
-    List<Lock> lockList = null;
-    for (Integer varIndex : _lockTable.keySet()) {
-      lockList = _lockTable.get(varIndex);
-      int size = lockList.size();
-      for (int i = size - 1; i >= 0; i--) {
-        if (lockList.get(i).getTranId() == tid) {
-          lockList.remove(i);
-          break;
-        }
-      }
-    }
-  }
-
   /** recover this site */
   public void recover() {
     _siteStatus = true;
@@ -364,7 +346,13 @@ public class DatabaseManager {
    * @return true if can write, false if can't
    */
   public boolean isWritable(int tid, int varIndex) {
-    return !hasConflict(tid, varIndex, Lock.Type.WRITE);
+    if(!hasConflict(tid, varIndex, Lock.Type.WRITE)){
+      setLock(tid, varIndex, Lock.Type.WRITE);
+      _accessedTransactions.add(tid);
+      return true;
+    }else{
+      return false;
+    }
   }
 
   /**

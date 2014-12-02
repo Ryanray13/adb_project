@@ -22,6 +22,8 @@ public class TransactionManager {
 
   private BufferedReader br;
   
+  private boolean commitOrAbort;
+  
   // Map<Transaction id, Transaction>.
   private Map<Integer, Transaction> transactions =
       new HashMap<Integer, Transaction>();
@@ -118,6 +120,7 @@ public class TransactionManager {
   public void run() {
     try {
       while (true) {
+        commitOrAbort = false;
         String line = br.readLine();
         if (line == null || line.contains("exit")) 
           break;
@@ -127,8 +130,11 @@ public class TransactionManager {
           List<Operation> operations = parseLine(line);
           batchExecute(operations);
         }
-        for (int i = 0; i < waitingOperations.size(); i++) {
-          execute(waitingOperations.poll());
+        while(commitOrAbort == true){
+          commitOrAbort = false;
+          for (int i = 0; i < waitingOperations.size(); i++) {
+            execute(waitingOperations.poll());
+          }
         }
         timestamp++;
       }
@@ -215,6 +221,7 @@ public class TransactionManager {
           dm.commit(tid);
         }
       }
+      commitOrAbort = true;
       committedTransactions.add(tid);
       if (transactions.containsKey(tid)) {
         if (transactions.get(tid).getType() == Transaction.Type.RO
@@ -458,6 +465,7 @@ public class TransactionManager {
       }
     }
     abortedTransactions.add(tid);
+    commitOrAbort = true;
   }
 
   // Return all sites that storing given variable.
