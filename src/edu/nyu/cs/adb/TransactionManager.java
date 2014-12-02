@@ -1,9 +1,11 @@
 package edu.nyu.cs.adb;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -20,14 +22,20 @@ public class TransactionManager {
   // Global time stamp
   private int timestamp;
 
+  //General input reader
   private BufferedReader br;
-  
-  //trace whether there is a transaction abort or commit
+
+  //General output writer
+  private BufferedWriter bw;
+
+  //indicate whether use standard output or not
+  private boolean stdout;
+
+  // trace whether there is a transaction abort or commit
   private boolean commitOrAbort;
-  
+
   // Map<Transaction id, Transaction>.
-  private Map<Integer, Transaction> transactions =
-      new HashMap<Integer, Transaction>();
+  private Map<Integer, Transaction> transactions = new HashMap<Integer, Transaction>();
 
   private List<DatabaseManager> databaseManagers;
 
@@ -44,7 +52,30 @@ public class TransactionManager {
   private Queue<Operation> waitingOperations = new LinkedList<Operation>();
 
   /**
+   * Constructor with standard input .
+   */
+  public TransactionManager() {
+    br = new BufferedReader(new InputStreamReader(System.in));
+    bw = new BufferedWriter(new OutputStreamWriter(System.out));
+    stdout = true;
+  }
+
+  /**
+   * Constructor with file input .
+   */
+  public TransactionManager(String inputFile) {
+    try {
+      br = new BufferedReader(new FileReader(inputFile));
+      bw = new BufferedWriter(new OutputStreamWriter(System.out));
+      stdout = true;
+    } catch (Exception e) {
+      System.err.println(e.getMessage());
+    }
+  }
+
+  /**
    * Return the current time stamp.
+   * 
    * @return current time stamp.
    */
   public int getCurrentTime() {
@@ -53,6 +84,7 @@ public class TransactionManager {
 
   /**
    * Check whether there is any running READ_ONLY transaction.
+   * 
    * @return true if there is running READ_ONLY transaction.
    */
   public boolean hasRunningReadonly() {
@@ -64,24 +96,6 @@ public class TransactionManager {
       }
     }
     return false;
-  }
-
-  /**
-   * Constructor with standard input .
-   */
-  public TransactionManager() {
-    br = new BufferedReader(new InputStreamReader(System.in));
-  }
-
-  /**
-   * Constructor with file input .
-   */
-  public TransactionManager(String inputFile) {
-    try {
-      br = new BufferedReader(new FileReader(inputFile));
-    } catch (Exception e) {
-      System.err.println(e.getMessage());
-    }
   }
 
   /**
@@ -115,15 +129,15 @@ public class TransactionManager {
   }
 
   /**
-   * Read contents from standard input or input file. Parse 
-   * instructions, and then execute operations accordingly. 
+   * Read contents from standard input or input file. Parse instructions,
+   * and then execute operations accordingly.
    */
   public void run() {
     try {
       while (true) {
         commitOrAbort = false;
         String line = br.readLine();
-        if (line == null || line.contains("exit")) 
+        if (line == null || line.contains("exit"))
           break;
         if (line.startsWith("//"))
           continue;
@@ -131,9 +145,10 @@ public class TransactionManager {
           List<Operation> operations = parseLine(line);
           batchExecute(operations);
         }
-        
-        //If there is a commit or abort, re-issue all the waiting operations
-        while(commitOrAbort == true){
+
+        // If there is a commit or abort, re-issue all the waiting
+        // operations
+        while (commitOrAbort == true) {
           commitOrAbort = false;
           for (int i = 0; i < waitingOperations.size(); i++) {
             execute(waitingOperations.poll());
@@ -142,17 +157,18 @@ public class TransactionManager {
         timestamp++;
       }
       br.close();
+      bw.close();
     } catch (IOException e) {
       System.err.println(e.getMessage());
     }
   }
 
   /**
-   * Parse line into list of operations. Execute instructions 
-   * for "begin", "end", "fail", "recover" immediately.
+   * Parse line into list of operations. Execute instructions for "begin",
+   * "end", "fail", "recover" immediately.
    */
   private List<Operation> parseLine(String line) {
-    String[] instructions = line.replaceAll("\\s+","").split(";");
+    String[] instructions = line.replaceAll("\\s+", "").split(";");
     List<Operation> result = new ArrayList<Operation>();
     for (String instruction : instructions) {
       String token = "";
@@ -160,7 +176,15 @@ public class TransactionManager {
       int tokenEnd = instruction.indexOf("(");
       int argsEnd = instruction.indexOf(")");
       if (tokenEnd == -1 || argsEnd == -1) {
-        System.out.println("Unexpected: " + instruction);
+        try {
+          bw.write("Unexpected: " + instruction);
+          bw.newLine();
+          if(stdout){
+            bw.flush();
+          }
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
         break;
       }
       token = instruction.substring(0, tokenEnd);
@@ -183,18 +207,28 @@ public class TransactionManager {
         parseDump(arg);
       } else if (token.equals("querystate")) {
         outputState();
-      }else if (token.equals("clear")) {
+      } else if (token.equals("clear")) {
         restart();
-      }else {
-        System.out.println("Unexpected input: " + instruction);
+      } else {
+        try {
+          bw.write("Unexpected input: " + instruction);
+          bw.newLine();
+          if(stdout){
+            bw.flush();
+          }
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
       }
     }
     return result;
   }
- 
+
   /*
    * Parse transaction id from tidStr and then create new transaction.
+   * 
    * @param type READ_ONLY or READ_WRITE
+   * 
    * @param tidStr string that containing transaction id.
    */
   private void beginTransaction(String type, String tidStr) {
@@ -209,11 +243,12 @@ public class TransactionManager {
           Transaction.Type.RW));
     }
   }
-  
+
   /*
-   * Notify database managers to commit given transaction if that 
-   * transaction has not been aborted and put that into committed list. 
-   * If RO commits and no more RO left, then clear all the copies in DMs.
+   * Notify database managers to commit given transaction if that
+   * transaction has not been aborted and put that into committed list. If
+   * RO commits and no more RO left, then clear all the copies in DMs.
+   * 
    * @param tidStr
    */
   private void endTransaction(String tidStr) {
@@ -238,9 +273,10 @@ public class TransactionManager {
   }
 
   /*
-   * Let the site at given index fail. Abort all transactions 
-   * that have accessed that site immediately.
-   * @param siteIndex 
+   * Let the site at given index fail. Abort all transactions that have
+   * accessed that site immediately.
+   * 
+   * @param siteIndex
    */
   private void fail(int siteIndex) {
     List<Integer> accessedTransactions = databaseManagers.get(siteIndex - 1)
@@ -250,19 +286,20 @@ public class TransactionManager {
       abort(tid);
     }
     databaseManagers.get(siteIndex - 1).fail();
-  } 
+  }
 
   /*
    * Recovery site at given index.
+   * 
    * @param index
    */
   private void recover(int index) {
     databaseManagers.get(index - 1).recover();
   }
-  
+
   /* Restart database, clear current states. */
   private void restart() {
-    init(10);   
+    init(10);
     timestamp = -1;
     transactions.clear();
     committedTransactions.clear();
@@ -271,32 +308,40 @@ public class TransactionManager {
   }
 
   /*
-   *  Print out current query state: committed transactions, aborted 
-   *  transactions, and running transactions.
+   * Print out current query state: committed transactions, aborted
+   * transactions, and running transactions.
    */
   private void outputState() {
-    System.out.println("Transactions committed:");
-    for (Integer t : committedTransactions) {
-      System.out.print("T" + t + " ");
-    }
-    System.out.println();
-    System.out.println("Transactions aborted:");
-    for (Integer t : abortedTransactions) {
-      System.out.print("T" + t + " ");
-    }
-    System.out.println();
-    System.out.println("Transactions still running:");
-    for (Integer tid : transactions.keySet()) {
-      if (!committedTransactions.contains(tid)
-          && !abortedTransactions.contains(tid)) {
-        System.out.print("T" + tid + " ");
+    try {
+      bw.write("Transactions committed:\n");
+      for (Integer t : committedTransactions) {
+        bw.write("T" + t + " ");
       }
+      bw.write("\n");
+      bw.write("Transactions aborted:\n");
+      for (Integer t : abortedTransactions) {
+        bw.write("T" + t + " ");
+      }
+      bw.write("\n");
+      bw.write("Transactions still running:\n");
+      for (Integer tid : transactions.keySet()) {
+        if (!committedTransactions.contains(tid)
+            && !abortedTransactions.contains(tid)) {
+          bw.write("T" + tid + " ");
+        }
+      }
+      bw.write("\n");
+      if(stdout){
+        bw.flush();
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
     }
-    System.out.println();
   }
 
   /*
    * Execute a batch of operations.
+   * 
    * @param operations
    */
   private void batchExecute(List<Operation> operations) {
@@ -307,6 +352,7 @@ public class TransactionManager {
 
   /*
    * Execute a single operation.
+   * 
    * @param operation
    */
   private void execute(Operation oper) {
@@ -383,7 +429,7 @@ public class TransactionManager {
         Data data = dm.read(transactions.get(operation.getTranId()), varIndex);
         if (data != null) {
           System.out
-             .println("T" + operation.getTranId() + " reads x" + varIndex
+              .println("T" + operation.getTranId() + " reads x" + varIndex
                   + " " + data.getValue() + " at site " + dm.getIndex());
           return;
         } else if (dm.getConflictTrans(varIndex) != null
@@ -399,9 +445,11 @@ public class TransactionManager {
   }
 
   /*
-   * If the transaction associated with given operation is older than 
-   * given t, then given operation should "wait". Otherwise, abort transaction.
+   * If the transaction associated with given operation is older than given
+   * t, then given operation should "wait". Otherwise, abort transaction.
+   * 
    * @param oper
+   * 
    * @param t
    */
   private boolean waitDieProtocol(Operation oper, int t) {
@@ -415,7 +463,7 @@ public class TransactionManager {
     }
   }
 
-  // Parse dump-related commands. 
+  // Parse dump-related commands.
   private void parseDump(String arg) {
     if (arg.equals("")) {
       dump();
@@ -429,7 +477,15 @@ public class TransactionManager {
   // Print all committed values af each variable at each site.
   private void dump() {
     for (DatabaseManager dm : databaseManagers) {
-      System.out.println("Site: " + dm.getIndex());
+      try {
+        bw.write("Site: " + dm.getIndex());
+        bw.newLine();
+        if(stdout){
+          bw.flush();
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
       dumpSite(dm.getIndex());
     }
   }
@@ -441,8 +497,15 @@ public class TransactionManager {
     List<Integer> indexList = new ArrayList<Integer>(siteVars.keySet());
     Collections.sort(indexList);
     for (Integer varIndex : indexList) {
-      System.out.println("x" + varIndex + ": "
-          + siteVars.get(varIndex).getValue());
+      try {
+        bw.write("x" + varIndex + ": " + siteVars.get(varIndex).getValue());
+        bw.newLine();
+        if(stdout){
+          bw.flush();
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
     }
   }
 
@@ -451,8 +514,16 @@ public class TransactionManager {
     for (DatabaseManager dm : databaseManagers) {
       Data data = dm.dump(varIndex);
       if (data != null) {
-        System.out.println("x" + varIndex + ": " + data.getValue()
-            + " at site " + dm.getIndex());
+        try {
+          bw.write("x" + varIndex + ": " + data.getValue() + " at site "
+              + dm.getIndex());
+          bw.newLine();
+          if(stdout){
+            bw.flush();
+          }
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
       }
     }
   }
@@ -485,12 +556,12 @@ public class TransactionManager {
     return Integer.parseInt(s.substring(1));
   }
 
-  // Parse site index out of string. 
+  // Parse site index out of string.
   private int parseSiteIndex(String s) {
     return Integer.parseInt(s);
   }
 
-  // Parse variable index from "x*" 
+  // Parse variable index from "x*"
   private int parseVariable(String s) {
     return Integer.parseInt(s.substring(1));
   }
@@ -504,7 +575,7 @@ public class TransactionManager {
     return new Operation(tid, var, timestamp, Operation.Type.READ);
   }
 
-  // Parse "T*, x*, **" into corresponding write operation 
+  // Parse "T*, x*, **" into corresponding write operation
   private Operation parseWriteOperation(String arg) {
     String[] args = arg.split(",");
     check(args.length == 3, "Unexpected Write " + arg);
@@ -514,10 +585,11 @@ public class TransactionManager {
     return new Operation(tid, var, timestamp, Operation.Type.WRITE, writeValue);
   }
 
-  // If condition is false, print out error message and exit program 
+  // If condition is false, print out error message and exit program
   private void check(boolean condition, String errMsg) {
-    if ( ! condition ) { 
-      System.err.println(errMsg); System.exit(-2); 
+    if (!condition) {
+      System.err.println(errMsg);
+      System.exit(-2);
     }
   }
 }

@@ -9,7 +9,9 @@ public class Database {
     TransactionManager tm;
     if (args.length == 0) {
       tm = new TransactionManager();
-    } else {
+    } else if (args.length == 1) {
+      tm = new TransactionManager(args[0]);
+    }else{
       tm = new TransactionManager(args[0]);
     }
     tm.init(10);
