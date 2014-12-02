@@ -250,6 +250,8 @@ public class DatabaseManager {
         }
       }
     }
+    //remove this transaction from accessed list
+    _accessedTransactions.remove(tid);
   }
 
   /**
@@ -274,6 +276,8 @@ public class DatabaseManager {
         }
       }
     }
+    //remove this transaction from accessed list
+    _accessedTransactions.remove(tid);
   }
 
   /**
