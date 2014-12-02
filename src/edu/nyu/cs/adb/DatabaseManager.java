@@ -166,7 +166,7 @@ public class DatabaseManager {
   /**
    * clear all the old copies of the variable on this site
    */
-  public void clearAllCopies() {
+  public void clearAllVersions() {
     for (Integer varIndex : _dataMap.keySet()) {
       List<Data> dataList = _dataMap.get(varIndex);
       while (dataList.size() > 1) {
@@ -375,5 +375,4 @@ public class DatabaseManager {
     }
     return conflictSet;
   }
-
 }

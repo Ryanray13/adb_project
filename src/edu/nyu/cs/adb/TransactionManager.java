@@ -220,7 +220,7 @@ public class TransactionManager {
       } else if (token.equals("dump")) {
         parseDump(arg);
       } else if (token.equals("querystate")) {
-        outputState();
+        queryState();
       } else if (token.equals("clear")) {
         restart();
       } else {
@@ -279,7 +279,7 @@ public class TransactionManager {
         if (transactions.get(tid).getType() == Transaction.Type.RO
             && !hasRunningReadonly()) {
           for (DatabaseManager dm : databaseManagers) {
-            dm.clearAllCopies();
+            dm.clearAllVersions();
           }
         }
       }
@@ -325,7 +325,7 @@ public class TransactionManager {
    * Print out current query state: committed transactions, aborted
    * transactions, and running transactions.
    */
-  private void outputState() {
+  private void queryState() {
     try {
       bw.write("Transactions committed:\n");
       for (Integer t : committedTransactions) {
